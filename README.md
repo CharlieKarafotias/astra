@@ -1,0 +1,2 @@
+# astra
+Daily wallpaper generator
