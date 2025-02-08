@@ -3,8 +3,7 @@ name = "astra"
 version = "0.1.0"
 edition = "2021"
 
-# TODO: limit to only features being used once done
 [dependencies]
-image = "0.25.5"
-num-complex = "0.4.6"
+image = { version = "0.25.5", features = ["png"] }
+num-complex = { version = "0.4.6", features = ["std"] }
 rand = "0.9.0"
