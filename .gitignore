@@ -28,3 +28,7 @@ Cargo.lock
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Project Specific
+*.png
+*.jpg
