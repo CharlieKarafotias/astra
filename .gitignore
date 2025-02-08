@@ -23,8 +23,3 @@ Cargo.lock
 # Added by cargo
 
 /target
-
-# MacOS specific
-.DS_Store
-.AppleDouble
-.LSOverride
