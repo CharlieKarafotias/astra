@@ -2,6 +2,26 @@ use std::error::Error;
 use std::process::Command;
 
 // --- OS specific code ---
+
+/// Retrieves the resolution of the main display in pixels.
+///
+/// This function runs the `system_profiler` command with the `SPDisplaysDataType` and
+/// `-detailLevel mini` arguments, then parses the output to extract the resolution of
+/// the display marked as the main display. If no main display can be found or if the
+/// resolution cannot be parsed from the output, this function returns an `Err`
+/// containing a `MacOSError` with the `ResolutionNotFound` variant. If the
+/// `system_profiler` command cannot be executed for any reason, this function will
+/// return an `Err` containing a `MacOSError` with the `SystemProfilerError` variant.
+///
+/// # Errors
+///
+/// If the `system_profiler` command cannot be executed for any reason, this function
+/// will return an `Err` containing a `MacOSError` with the `SystemProfilerError`
+/// variant.
+///
+/// If the resolution of the main display cannot be found in the output of
+/// the `system_profiler` command, this function will return an `Err` containing a
+/// `MacOSError` with the `ResolutionNotFound` variant.
 pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
     let output = Command::new("system_profiler")
         .arg("SPDisplaysDataType")
@@ -14,52 +34,92 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
     Ok((width, height))
 }
 
+/// Updates the wallpaper of all desktops to the image at the given path.
+///
+/// The given path should be a full valid path to an image file on the local machine.
+///
+/// # Errors
+///
+/// If the `osascript` command cannot be executed for any reason, this function will return an
+/// `Err` containing a `MacOSError` with the `SystemProfilerError` variant.
+pub(crate) fn update_wallpaper(path: &str) -> Result<(), MacOSError> {
+    let script = format!(
+        "tell application \"System Events\" to set picture of every desktop to POSIX file \"{}\"",
+        path
+    );
+
+    Command::new("osascript")
+        .arg("-e")
+        .arg(script)
+        .output()
+        .map_err(|_| MacOSError::SystemProfilerError)?;
+    Ok(())
+}
+
 // --- OS specific code ---
 
 // --- Helper functions ---
+
+/// Parses the output of the `system_profiler` command with the `SPDisplaysDataType`
+/// and `-detailLevel mini` arguments.
+///
+/// This function first finds the line with `Main Display: Yes` and counts the number
+/// of spaces preceding it until a newline. It then finds all lines with the same
+/// number of spaces preceding/succeeding them and stores them in a vector. It then finds the
+/// line with `Resolution:` and extracts the next two numbers from it, returning them
+/// as a `(width, height)` tuple.
+///
+/// # Errors
+///
+/// If the line containing `Main Display: Yes` cannot be found in the output of the
+/// `system_profiler` command, this function will return an `Err` containing a
+/// `MacOSError` with the `MainDisplayNotFound` variant.
+///
+/// If the resolution of the main display cannot be found in the output of
+/// the `system_profiler` command, this function will return an `Err` containing a
+/// `MacOSError` with the `ResolutionNotFound` variant.
 fn parse_output(output: &str) -> Result<(u32, u32), MacOSError> {
     // find line with Main Display: Yes
-    let main_display_idx = output.lines()
+    let main_display_idx = output
+        .lines()
         .position(|x| x.contains("Main Display: Yes"))
         .ok_or(MacOSError::MainDisplayNotFound)?;
-    println!("Main display line: {}", output.lines().nth(main_display_idx).unwrap());
 
     // count spaces preceding it until new line
-    let main_display_line = output.lines().nth(main_display_idx)
+    let main_display_line = output
+        .lines()
+        .nth(main_display_idx)
         .ok_or(MacOSError::MainDisplayNotFound)?;
-    let trimmed_line = main_display_line.trim_start_matches(' ');
-    let num_spaces = main_display_line.len() - trimmed_line.len();
-    println!("Number of spaces: {}", num_spaces);
+    let num_spaces = preceding_spaces(main_display_line);
 
     // grab all lines with that many spaces preceding them
     let mut properties: Vec<&str> = vec![];
     // check up
-    let mut i = main_display_idx - 1;
+    let mut i = main_display_idx
+        .checked_sub(1)
+        .ok_or(MacOSError::ResolutionNotFound)?;
     while i > 0 {
-        let line = output.lines().nth(i).unwrap();
-        let trimmed_line = line.trim_start_matches(' ');
-        let curr_line_spaces = line.len() - trimmed_line.len();
-        if curr_line_spaces != num_spaces {
+        let line = output.lines().nth(i).expect("Unable to get line");
+        let added_property = get_key_value_pair_based_on_spaces(&mut properties, line, num_spaces);
+        if !added_property {
             break;
         }
-        properties.push(line);
         i -= 1;
     }
     // check down
-    let mut i = main_display_idx + 1;
+    i = main_display_idx + 1;
     while i < output.lines().count() {
-        let line = output.lines().nth(i).unwrap();
-        let trimmed_line = line.trim_start_matches(' ');
-        let curr_line_spaces = line.len() - trimmed_line.len();
-        if curr_line_spaces != num_spaces {
+        let line = output.lines().nth(i).expect("Unable to get line");
+        let added_property = get_key_value_pair_based_on_spaces(&mut properties, line, num_spaces);
+        if !added_property {
             break;
         }
-        properties.push(line);
         i += 1;
     }
 
     // find line with Resolution: and grab next 2 numbers
-    Ok(properties.iter()
+    Ok(properties
+        .iter()
         .find(|x| x.contains("Resolution:"))
         .ok_or(MacOSError::ResolutionNotFound)
         .and_then(|x| {
@@ -67,7 +127,8 @@ fn parse_output(output: &str) -> Result<(u32, u32), MacOSError> {
                 .split(" x ")
                 .map(|x| {
                     let num: String = x.chars().filter(|c| c.is_digit(10)).collect();
-                    num.parse::<u32>().map_err(|_| MacOSError::ResolutionNotFound)
+                    num.parse::<u32>()
+                        .map_err(|_| MacOSError::ResolutionNotFound)
                 })
                 .collect::<Result<Vec<u32>, MacOSError>>()?;
 
@@ -76,6 +137,51 @@ fn parse_output(output: &str) -> Result<(u32, u32), MacOSError> {
             }
             Ok((resolution_vals[0], resolution_vals[1]))
         }))?
+}
+
+/// Counts the number of spaces preceding the first non-space character in a line.
+///
+/// This function calculates the number of leading spaces in the provided string `line`
+/// by trimming the leading spaces and subtracting the length of the trimmed string from
+/// the original string length. It returns the count of these leading spaces.
+///
+/// # Arguments
+///
+/// * `line` - A string slice that represents the line to be analyzed.
+///
+/// # Returns
+///
+/// * `usize` - The number of leading spaces in the line.
+fn preceding_spaces(line: &str) -> usize {
+    line.len() - line.trim_start_matches(' ').len()
+}
+
+/// Checks if the number of spaces preceding the first non-space character in `line`
+/// matches the value of `num_spaces`. If it does, it adds `line` to `properties`
+/// and returns `true`. If not, it returns `false`.
+///
+/// # Arguments
+///
+/// * `properties` - A mutable vector of string slices to add lines to if they
+///   match the number of spaces.
+/// * `line` - A string slice that represents the line to be analyzed.
+/// * `num_spaces` - The number of spaces that should precede the first
+///   non-space character in `line`.
+///
+/// # Returns
+///
+/// * `bool` - `true` if `line` was added to `properties`; `false` otherwise.
+fn get_key_value_pair_based_on_spaces<'a>(
+    properties: &mut Vec<&'a str>,
+    line: &'a str,
+    num_spaces: usize,
+) -> bool {
+    if preceding_spaces(line) != num_spaces {
+        false
+    } else {
+        properties.push(line);
+        true
+    }
 }
 
 // --- Helper functions ---
@@ -92,8 +198,12 @@ impl std::fmt::Display for MacOSError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MacOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
-            MacOSError::ResolutionNotFound => write!(f, "Unable to determine resolution of main display"),
-            MacOSError::SystemProfilerError => write!(f, "Encountered error running system_profiler"),
+            MacOSError::ResolutionNotFound => {
+                write!(f, "Unable to determine resolution of main display")
+            }
+            MacOSError::SystemProfilerError => {
+                write!(f, "Encountered error running system_profiler")
+            }
         }
     }
 }
