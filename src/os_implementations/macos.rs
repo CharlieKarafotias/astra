@@ -215,6 +215,8 @@ impl Error for MacOSError {}
 
 #[cfg(test)]
 mod macos {
+    use super::*;
+
     #[test]
     fn it_parses_valid_output() {
         let output = r#"
@@ -269,6 +271,43 @@ mod macos {
         let output = "Main Display: Yes";
         let res = super::parse_output(output);
         assert_eq!(res.err().unwrap(), super::MacOSError::ResolutionNotFound);
+    }
+
+    #[test]
+    fn it_counts_leading_spaces_correctly() {
+        assert_eq!(preceding_spaces("    four leading spaces"), 4);
+        assert_eq!(preceding_spaces("no leading spaces"), 0);
+        assert_eq!(preceding_spaces("  two leading spaces"), 2);
+        assert_eq!(preceding_spaces("      six leading spaces"), 6);
+    }
+
+    #[test]
+    fn it_handles_empty_string() {
+        assert_eq!(preceding_spaces(""), 0);
+    }
+
+    #[test]
+    fn it_handles_only_spaces() {
+        assert_eq!(preceding_spaces("     "), 5);
+    }
+    #[test]
+    fn it_adds_line_with_correct_spaces() {
+        let mut properties = vec![];
+        let line = "    Key: Value";
+        let num_spaces = 4;
+        let added = get_key_value_pair_based_on_spaces(&mut properties, line, num_spaces);
+        assert!(added);
+        assert_eq!(properties, vec!["    Key: Value"]);
+    }
+
+    #[test]
+    fn it_does_not_add_line_with_incorrect_spaces() {
+        let mut properties = vec![];
+        let line = "  Key: Value";
+        let num_spaces = 4;
+        let added = get_key_value_pair_based_on_spaces(&mut properties, line, num_spaces);
+        assert!(!added);
+        assert!(properties.is_empty());
     }
 }
 
