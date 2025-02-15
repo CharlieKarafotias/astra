@@ -1,6 +1,7 @@
+use std::env;
 use std::error::Error;
+use std::path::PathBuf;
 use std::process::Command;
-
 // --- OS specific code ---
 
 /// Retrieves the resolution of the main display in pixels.
@@ -23,6 +24,7 @@ use std::process::Command;
 /// the `system_profiler` command, this function will return an `Err` containing a
 /// `MacOSError` with the `ResolutionNotFound` variant.
 pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
+    println!("Getting screen resolution...");
     let output = Command::new("system_profiler")
         .arg("SPDisplaysDataType")
         .arg("-detailLevel")
@@ -42,10 +44,11 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
 ///
 /// If the `osascript` command cannot be executed for any reason, this function will return an
 /// `Err` containing a `MacOSError` with the `SystemProfilerError` variant.
-pub(crate) fn update_wallpaper(path: &str) -> Result<(), MacOSError> {
+pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
+    println!("Updating wallpaper...");
     let script = format!(
-        "tell application \"System Events\" to set picture of every desktop to POSIX file \"{}\"",
-        path
+        "tell application \"System Events\" to set picture of every desktop to POSIX file {:?}",
+        path.as_os_str().to_os_string()
     );
 
     Command::new("osascript")
@@ -56,6 +59,17 @@ pub(crate) fn update_wallpaper(path: &str) -> Result<(), MacOSError> {
     Ok(())
 }
 
+/// Returns the path to the desktop folder on the local machine.
+///
+/// # Errors
+///
+/// If the `HOME` environment variable cannot be found, this function will return an
+/// `Err` containing a `MacOSError` with the `HomeEnvVarNotFound` variant.
+pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, MacOSError> {
+    let home_dir = env::var("HOME").map_err(|_| MacOSError::HomeEnvVarNotFound)?;
+    let desktop_path = PathBuf::from(home_dir).join("Desktop");
+    Ok(desktop_path)
+}
 // --- OS specific code ---
 
 // --- Helper functions ---
@@ -189,6 +203,7 @@ fn get_key_value_pair_based_on_spaces<'a>(
 // --- Errors ---
 #[derive(Debug, PartialEq)]
 pub enum MacOSError {
+    HomeEnvVarNotFound,
     MainDisplayNotFound,
     ResolutionNotFound,
     SystemProfilerError,
@@ -197,6 +212,9 @@ pub enum MacOSError {
 impl std::fmt::Display for MacOSError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            MacOSError::HomeEnvVarNotFound => {
+                write!(f, "Unable to find $HOME environment variable")
+            }
             MacOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
             MacOSError::ResolutionNotFound => {
                 write!(f, "Unable to determine resolution of main display")
