@@ -53,6 +53,43 @@ pub(crate) fn save_image(
         .map_err(|_| WallpaperGeneratorError::ImageSaveError)?;
     Ok(save_path)
 }
+
+/// Scales the range of the provided plane to generate a zoomed in image.
+///
+/// Given the original range of the plane, the center point of the
+/// image to focus on, and a scale factor, this function returns the new
+/// range of the plane and the start points of the image so that
+/// the image will be centered and scaled accordingly while keeping
+/// the focus point as the center of the image.
+///
+/// # Arguments
+///
+/// * `x_range` - The range of the original x-axis.
+/// * `y_range` - The range of the original y-axis.
+/// * `focus_pt` - The center point of the image to focus on.
+/// * `scale_factor` - The scale factor to apply to the image.
+///
+/// # Returns
+///
+/// A tuple containing:
+///   - the new range of the x-axis
+///   - the new range of the y-axis
+///   - the start point of the x-axis
+///   -  the start point of the y-axis
+pub(crate) fn scale_image(
+    x_range: f64,
+    y_range: f64,
+    focus_pt: (f64, f64),
+    scale_factor: f64,
+) -> (f64, f64, f64, f64) {
+    // scale_factor 2 means halve the size of the image
+    let scaled_x_range = x_range / scale_factor;
+    let scaled_y_range = y_range / scale_factor;
+    // get start points so if center of image then
+    let x_start = focus_pt.0 - (scaled_x_range / 2.0);
+    let y_start = focus_pt.1 - (scaled_y_range / 2.0);
+    (scaled_x_range, scaled_y_range, x_start, y_start)
+}
 // --- Utils ---
 
 // --- Errors ---

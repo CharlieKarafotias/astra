@@ -1,4 +1,4 @@
-use super::{save_image, WallpaperGeneratorError};
+use super::{save_image, scale_image, WallpaperGeneratorError};
 use image::ImageBuffer;
 use num_complex::Complex;
 use std::path::PathBuf;
@@ -9,15 +9,15 @@ pub(crate) fn generate_julia_set(
     width: u32,
     height: u32,
 ) -> Result<PathBuf, WallpaperGeneratorError> {
-    let scalex = 3.0 / width as f64;
-    let scaley = 3.5 / height as f64;
+    let focus_pt = (0.0, 0.25);
+    let (scale_x, scale_y, start_x, start_y) = scale_image(3.0, 3.5, focus_pt, 1.5);
     let mut imgbuf = ImageBuffer::new(width, height);
 
     // Generate julia set
     for x in 0..width {
         for y in 0..height {
-            let cx = x as f64 * scalex - 1.5;
-            let cy = y as f64 * scaley - 1.5;
+            let cx = x as f64 * (scale_x / width as f64) + start_x;
+            let cy = y as f64 * (scale_y / height as f64) + start_y;
 
             let c = Complex::new(-0.70176, -0.3842);
             let mut z = Complex::new(cx, cy);
