@@ -137,7 +137,7 @@ fn parse_output(output: &str) -> Result<(u32, u32), MacOSError> {
         .find(|x| x.contains("Resolution:"))
         .ok_or(MacOSError::ResolutionNotFound)
         .and_then(|x| {
-            let mut resolution_vals = x
+            let resolution_vals = x
                 .split(" x ")
                 .map(|x| {
                     let num: String = x.chars().filter(|c| c.is_digit(10)).collect();

@@ -1,11 +1,13 @@
 use super::os_implementations::path_to_desktop_folder;
-use std::error::Error;
-use std::fs::create_dir_all;
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    error::Error,
+    fs::create_dir_all,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 mod fractals;
-pub use fractals::*;
+pub use fractals::{generate_julia_set, generate_mandelbrot_set};
 
 // --- Utils ---
 
@@ -15,7 +17,7 @@ pub use fractals::*;
 ///
 /// A `Result` containing the path to the created folder on success, or a
 /// `WallpaperGeneratorError` on failure.
-pub(crate) fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorError> {
+fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorError> {
     println!("Preparing astra_wallpaper folder on desktop...");
     let path = path_to_desktop_folder()
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
@@ -37,7 +39,7 @@ pub(crate) fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorErr
 ///
 /// A `Result` containing the path to the saved image on success, or a
 /// `WallpaperGeneratorError` on failure.
-pub(crate) fn save_image(
+fn save_image(
     image: &image::ImageBuffer<image::Rgb<u8>, Vec<u8>>,
 ) -> Result<PathBuf, WallpaperGeneratorError> {
     let mut save_path = create_wallpaper_folder()?;
@@ -95,7 +97,6 @@ pub(crate) fn scale_image(
 // --- Errors ---
 #[derive(Debug, PartialEq)]
 pub(crate) enum WallpaperGeneratorError {
-    DesktopWallpaperFolderCreationError,
     ImageSaveError,
     OSError(String),
 }
@@ -103,9 +104,6 @@ pub(crate) enum WallpaperGeneratorError {
 impl std::fmt::Display for WallpaperGeneratorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WallpaperGeneratorError::DesktopWallpaperFolderCreationError => {
-                write!(f, "Unable to create wallpaper folder on desktop")
-            }
             WallpaperGeneratorError::ImageSaveError => {
                 write!(f, "Failed to save image to file")
             }
