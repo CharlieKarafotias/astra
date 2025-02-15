@@ -3,6 +3,7 @@ use image::ImageBuffer;
 use num_complex::Complex;
 use rand::random_range;
 use std::path::PathBuf;
+use log::debug;
 
 // TODO: optimize algorithm using multithreading
 pub fn generate_julia_set(width: u32, height: u32) -> Result<PathBuf, WallpaperGeneratorError> {
@@ -17,11 +18,12 @@ pub fn generate_julia_set(width: u32, height: u32) -> Result<PathBuf, WallpaperG
         Complex::new(0.4, 0.4),
     ];
     let selected_julia_set = julia_sets[random_range(0..julia_sets.len())];
-    println!("Selected julia set: c={:?}", selected_julia_set);
+    debug!("Selected julia set: c={:?}", selected_julia_set);
 
     // Find hotspots and randomly select one
     let points_weights = sample_julia_set(selected_julia_set, width, height);
     let complex_hotspot = points_weights[random_range(0..points_weights.len())].0;
+    debug!("Selected hotspot: z={:?}", complex_hotspot);
 
     let focus_pt = (complex_hotspot.re, complex_hotspot.im);
     let (scale_x, scale_y, start_x, start_y) =
@@ -44,6 +46,7 @@ pub fn generate_julia_set(width: u32, height: u32) -> Result<PathBuf, WallpaperG
             }
 
             // TODO: randomize color
+            // See: https://stackoverflow.com/questions/23711681/generating-custom-color-palette-for-julia-set
             let pixel = imgbuf.get_pixel_mut(x, y);
             let image::Rgb(data) = *pixel;
             *pixel = image::Rgb([data[0], data[1], i as u8]);
@@ -62,18 +65,22 @@ pub fn generate_mandelbrot_set(width: u32, height: u32) -> () {
 fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f64>, u32)> {
     let mut points_weights = vec![];
     let mut i = 0;
+    let aspect_ratio = (width as f64 / height as f64).round() as u32;
     while points_weights.is_empty() && i < 5 {
         // Algorithm
         let height_ratio: u32 = 10 * (i + 1); // Backoff if fail to find points
-        let width_ratio = (width as f64 / height as f64).round() as u32 * height_ratio;
+        let width_ratio = aspect_ratio * height_ratio;
         let x_interval = width / width_ratio;
         let y_interval = height / height_ratio;
+        let scaled_x = 3.0 / width as f64;
+        let scaled_y = 3.5 / height as f64;
+
         for i in 0..width_ratio {
             for j in 0..height_ratio {
                 let x = x_interval * i + (x_interval / 2);
                 let y = y_interval * j + (y_interval / 2);
-                let cx = x as f64 * (3.0 / width as f64);
-                let cy = y as f64 * (3.5 / height as f64);
+                let cx = x as f64 * scaled_x;
+                let cy = y as f64 * scaled_y;
                 let mut z = Complex::new(cx, cy);
                 let mut i = 0;
                 while i < 255 && z.norm() <= 2.0 {

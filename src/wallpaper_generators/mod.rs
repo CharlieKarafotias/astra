@@ -5,6 +5,7 @@ use std::{
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
+use log::{debug, info};
 
 mod fractals;
 pub use fractals::{generate_julia_set, generate_mandelbrot_set};
@@ -18,7 +19,7 @@ pub use fractals::{generate_julia_set, generate_mandelbrot_set};
 /// A `Result` containing the path to the created folder on success, or a
 /// `WallpaperGeneratorError` on failure.
 fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorError> {
-    println!("Preparing astra_wallpaper folder on desktop...");
+    info!("Preparing astra_wallpaper folder on desktop...");
     let path = path_to_desktop_folder()
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
         .join("astra_wallpapers");
@@ -49,7 +50,7 @@ fn save_image(
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
 
     save_path = save_path.join(format!("julia_{}.png", time.as_secs().to_string()));
-
+    debug!("Saving image to: {}", save_path.display());
     image
         .save(&save_path)
         .map_err(|_| WallpaperGeneratorError::ImageSaveError)?;

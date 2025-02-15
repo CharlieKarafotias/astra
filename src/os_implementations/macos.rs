@@ -1,7 +1,10 @@
-use std::env;
-use std::error::Error;
-use std::path::PathBuf;
-use std::process::Command;
+use std::{
+    env,
+    error::Error,
+    path::PathBuf,
+    process::Command,
+};
+use log::{debug, info};
 // --- OS specific code ---
 
 /// Retrieves the resolution of the main display in pixels.
@@ -24,7 +27,7 @@ use std::process::Command;
 /// the `system_profiler` command, this function will return an `Err` containing a
 /// `MacOSError` with the `ResolutionNotFound` variant.
 pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
-    println!("Getting screen resolution...");
+    info!("Getting screen resolution...");
     let output = Command::new("system_profiler")
         .arg("SPDisplaysDataType")
         .arg("-detailLevel")
@@ -33,6 +36,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
         .map_err(|_| MacOSError::SystemProfilerError)?;
 
     let (width, height) = parse_output(&String::from_utf8_lossy(&output.stdout))?;
+    debug!("Screen resolution: {}x{}", width, height);
     Ok((width, height))
 }
 
@@ -45,7 +49,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
 /// If the `osascript` command cannot be executed for any reason, this function will return an
 /// `Err` containing a `MacOSError` with the `SystemProfilerError` variant.
 pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
-    println!("Updating wallpaper...");
+    info!("Updating wallpaper...");
     let script = format!(
         "tell application \"System Events\" to set picture of every desktop to POSIX file {:?}",
         path.as_os_str().to_os_string()
@@ -68,6 +72,7 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
 pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, MacOSError> {
     let home_dir = env::var("HOME").map_err(|_| MacOSError::HomeEnvVarNotFound)?;
     let desktop_path = PathBuf::from(home_dir).join("Desktop");
+    debug!("Desktop path: {}", desktop_path.display());
     Ok(desktop_path)
 }
 // --- OS specific code ---
