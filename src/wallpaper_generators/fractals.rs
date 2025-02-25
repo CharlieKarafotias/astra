@@ -1,3 +1,4 @@
+use crate::wallpaper_generators::{create_color_map, Operator};
 use super::{save_image, scale_image, WallpaperGeneratorError};
 use image::ImageBuffer;
 use num_complex::Complex;
@@ -7,6 +8,13 @@ use log::debug;
 
 // TODO: optimize algorithm using multithreading
 pub fn generate_julia_set(width: u32, height: u32) -> Result<PathBuf, WallpaperGeneratorError> {
+    let color_map = create_color_map(Operator::Gradient, 256, vec![
+        [234, 224, 255],
+        [221, 187, 255],
+        [185, 134, 255],
+        [128, 0, 255],
+        [75, 0, 130],
+    ]);
     // Setup
     let julia_sets = vec![
         Complex::new(-0.70176, -0.3842),
@@ -27,7 +35,7 @@ pub fn generate_julia_set(width: u32, height: u32) -> Result<PathBuf, WallpaperG
 
     let focus_pt = (complex_hotspot.re, complex_hotspot.im);
     let (scale_x, scale_y, start_x, start_y) =
-        scale_image(3.0, 3.5, focus_pt, random_range(2.0..5.0));
+        scale_image(3.0, 3.5, focus_pt, random_range(1.0..10.0));
     let mut imgbuf = ImageBuffer::new(width, height);
 
     // Generate full julia set
@@ -45,11 +53,9 @@ pub fn generate_julia_set(width: u32, height: u32) -> Result<PathBuf, WallpaperG
                 i += 1;
             }
 
-            // TODO: randomize color
-            // See: https://stackoverflow.com/questions/23711681/generating-custom-color-palette-for-julia-set
             let pixel = imgbuf.get_pixel_mut(x, y);
-            let image::Rgb(data) = *pixel;
-            *pixel = image::Rgb([data[0], data[1], i as u8]);
+
+            *pixel = image::Rgb(color_map[i]);
         }
     }
 
@@ -88,6 +94,7 @@ fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f6
                     i += 1;
                 }
 
+                // TODO: make this customizable
                 if i > 100 {
                     points_weights.push((Complex::new(cx, cy), i));
                 }

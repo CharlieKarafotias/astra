@@ -27,6 +27,42 @@ fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorError> {
     Ok(path)
 }
 
+enum Operator {
+    Gradient,
+}
+
+fn create_color_map(op: Operator, steps: usize, colors: Vec<[u8; 3]>) -> Vec<[u8; 3]> {
+    let mut color_map = Vec::with_capacity(steps);
+    match op {
+        Operator::Gradient => {
+            if colors.len() == 1 {
+                for _ in 0..steps {
+                    color_map.push(colors[0]);
+                }
+            } else {
+                let color_steps = (steps - 1) / (colors.len() - 1);
+                for i in 0..steps {
+                    let color_idx = (i as f64 / color_steps as f64).floor() as usize;
+                    if color_idx == (colors.len() - 1) {
+                        color_map.push(colors[color_idx]);
+                    } else {
+                        let new_color = mix_color(colors[color_idx], colors[color_idx + 1], (i % color_steps) as f64 / color_steps as f64);
+                        color_map.push(new_color);
+                    }
+                }
+            }
+        }
+    }
+    color_map
+}
+
+fn mix_color(color1: [u8; 3], color2: [u8; 3], weight_color_2: f64) -> [u8; 3] {
+    let r = color1[0] as f64 * (1.0 - weight_color_2) + color2[0] as f64 * weight_color_2;
+    let g = color1[1] as f64 * (1.0 - weight_color_2) + color2[1] as f64 * weight_color_2;
+    let b = color1[2] as f64 * (1.0 - weight_color_2) + color2[2] as f64 * weight_color_2;
+    [r as u8, g as u8, b as u8]
+}
+
 /// Saves the given image to a file in the desktop wallpaper folder.
 ///
 /// The file is named using the current UNIX timestamp to ensure uniqueness.
@@ -117,3 +153,36 @@ impl std::fmt::Display for WallpaperGeneratorError {
 
 impl Error for WallpaperGeneratorError {}
 // --- Errors ---
+
+// --- Tests ---
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scale_image() {
+        let (x_range, y_range, x_start, y_start) = scale_image(10.0, 10.0, (0.0, 0.0), 2.0);
+        assert_eq!(x_range, 5.0);
+        assert_eq!(y_range, 5.0);
+        assert_eq!(x_start, -2.5);
+        assert_eq!(y_start, -2.5);
+    }
+
+    #[test]
+    fn test_create_color_map_all_red() {
+        let color_map = create_color_map(Operator::Gradient, 256, vec![[255, 0, 0]]);
+        assert_eq!(color_map.len(), 256);
+        for color in color_map {
+            assert_eq!(color, [255, 0, 0]);
+        }
+    }
+
+    #[test]
+    fn test_create_color_map_red_green() {
+        let color_map = create_color_map(Operator::Gradient, 256, vec![[255, 0, 0], [0, 255, 0]]);
+        assert_eq!(color_map.len(), 256);
+        assert_eq!(color_map[0], [255, 0, 0]);
+        assert_eq!(color_map[255], [0, 255, 0]);
+    }
+}
+// --- Tests ---
