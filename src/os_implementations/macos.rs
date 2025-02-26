@@ -1,10 +1,5 @@
-use std::{
-    env,
-    error::Error,
-    path::PathBuf,
-    process::Command,
-};
 use log::{debug, info};
+use std::{env, error::Error, path::PathBuf, process::Command};
 // --- OS specific code ---
 
 /// Retrieves the resolution of the main display in pixels.

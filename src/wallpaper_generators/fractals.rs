@@ -1,20 +1,23 @@
-use crate::wallpaper_generators::{create_color_map, Operator};
-use super::{save_image, scale_image, WallpaperGeneratorError};
+use super::utils::{create_color_map, save_image, scale_image, Operator, WallpaperGeneratorError};
 use image::ImageBuffer;
+use log::debug;
 use num_complex::Complex;
 use rand::random_range;
 use std::path::PathBuf;
-use log::debug;
 
 // TODO: optimize algorithm using multithreading
 pub fn generate_julia_set(width: u32, height: u32) -> Result<PathBuf, WallpaperGeneratorError> {
-    let color_map = create_color_map(Operator::Gradient, 256, vec![
-        [234, 224, 255],
-        [221, 187, 255],
-        [185, 134, 255],
-        [128, 0, 255],
-        [75, 0, 130],
-    ]);
+    let color_map = create_color_map(
+        Operator::Gradient,
+        256,
+        vec![
+            [234, 224, 255],
+            [221, 187, 255],
+            [185, 134, 255],
+            [128, 0, 255],
+            [75, 0, 130],
+        ],
+    );
     // Setup
     let julia_sets = vec![
         Complex::new(-0.70176, -0.3842),

@@ -1,8 +1,8 @@
 mod os_implementations;
 mod wallpaper_generators;
 
-use log::info;
 use env_logger::{self, Builder, Env};
+use log::info;
 use os_implementations::{get_screen_resolution, update_wallpaper};
 use wallpaper_generators::generate_julia_set;
 
