@@ -39,7 +39,7 @@ pub(super) enum Operator {
 /// # Returns
 ///
 /// A vector of color map entries.
-pub(super) fn create_color_map(op: Operator, steps: usize, colors: Vec<[u8; 3]>) -> Vec<[u8; 3]> {
+pub(super) fn create_color_map(op: Operator, steps: usize, colors: &Vec<[u8; 3]>) -> Vec<[u8; 3]> {
     let mut color_map = Vec::with_capacity(steps);
     match op {
         Operator::Gradient => {
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_create_color_map_all_red() {
-        let color_map = create_color_map(Operator::Gradient, 256, vec![[255, 0, 0]]);
+        let color_map = create_color_map(Operator::Gradient, 256, &vec![[255, 0, 0]]);
         assert_eq!(color_map.len(), 256);
         for color in color_map {
             assert_eq!(color, [255, 0, 0]);
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_create_color_map_red_green() {
-        let color_map = create_color_map(Operator::Gradient, 256, vec![[255, 0, 0], [0, 255, 0]]);
+        let color_map = create_color_map(Operator::Gradient, 256, &vec![[255, 0, 0], [0, 255, 0]]);
         assert_eq!(color_map.len(), 256);
         assert_eq!(color_map[0], [255, 0, 0]);
         assert_eq!(color_map[255], [0, 255, 0]);

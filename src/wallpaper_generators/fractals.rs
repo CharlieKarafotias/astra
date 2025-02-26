@@ -1,22 +1,20 @@
-use super::utils::{create_color_map, save_image, scale_image, Operator, WallpaperGeneratorError};
+use super::color_themes::THEMES;
+use super::utils::{Operator, WallpaperGeneratorError, create_color_map, save_image, scale_image};
 use image::ImageBuffer;
-use log::debug;
+use log::{debug, info};
 use num_complex::Complex;
-use rand::random_range;
+use rand::{random_iter, random_range};
 use std::path::PathBuf;
 
 // TODO: optimize algorithm using multithreading
 pub fn generate_julia_set(width: u32, height: u32) -> Result<PathBuf, WallpaperGeneratorError> {
+    info!("Generating julia set...");
+    let selected_theme = THEMES[random_range(0..THEMES.len())];
+    info!("Theme: {selected_theme}");
     let color_map = create_color_map(
         Operator::Gradient,
         256,
-        vec![
-            [234, 224, 255],
-            [221, 187, 255],
-            [185, 134, 255],
-            [128, 0, 255],
-            [75, 0, 130],
-        ],
+        selected_theme.get_colors(true),
     );
     // Setup
     let julia_sets = vec![

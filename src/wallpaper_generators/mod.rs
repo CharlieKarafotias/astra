@@ -1,3 +1,4 @@
+mod color_themes;
 mod fractals;
 mod utils;
 

@@ -1,11 +1,13 @@
 [package]
 name = "astra"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+repository = "https://github.com/CharlieKarafotias/astra"
+authors = ["Charlie Karafotias <cnkara2023@gmail.com>"]
 
 [dependencies]
 env_logger = "0.11.6"
 image = { version = "0.25.5", features = ["png"] }
-log = "0.4.25"
+log = "0.4.26"
 num-complex = { version = "0.4.6", features = ["std"] }
 rand = "0.9.0"
