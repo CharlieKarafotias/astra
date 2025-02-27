@@ -59,6 +59,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
     Ok((width, height))
 }
 
+// TODO: known bug - if System Settings -> Wallpaper -> Show on all Spaces is not enabled, then wallpaper does not persist when number of monitors changes after being set
 /// Updates the wallpaper of all desktops to the image at the given path.
 ///
 /// The given path should be a full valid path to an image file on the local machine.
