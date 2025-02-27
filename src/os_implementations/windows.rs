@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
 // --- OS specific code ---
+pub(crate) fn is_dark_mode_active() -> bool {
+    todo!("Implement for dark mode on windows")
+}
 pub(crate) fn get_screen_resolution() -> (u32, u32) {
     todo!("Implement for screen resolution on windows")
 }

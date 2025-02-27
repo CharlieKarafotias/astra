@@ -7,14 +7,18 @@ use rand::{random_iter, random_range};
 use std::path::PathBuf;
 
 // TODO: optimize algorithm using multithreading
-pub fn generate_julia_set(width: u32, height: u32) -> Result<PathBuf, WallpaperGeneratorError> {
+pub fn generate_julia_set(
+    width: u32,
+    height: u32,
+    dark_mode: bool,
+) -> Result<PathBuf, WallpaperGeneratorError> {
     info!("Generating julia set...");
     let selected_theme = THEMES[random_range(0..THEMES.len())];
     info!("Theme: {selected_theme}");
     let color_map = create_color_map(
         Operator::Gradient,
         256,
-        selected_theme.get_colors(true),
+        selected_theme.get_colors(dark_mode),
     );
     // Setup
     let julia_sets = vec![

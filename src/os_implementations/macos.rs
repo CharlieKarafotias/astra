@@ -2,6 +2,30 @@ use log::{debug, info};
 use std::{env, error::Error, path::PathBuf, process::Command};
 // --- OS specific code ---
 
+/// Checks if the user's OS is currently in dark mode
+///
+/// # Errors
+///
+/// Returns a `MacOSError` with the `DarkModeError` variant if the command to determine
+/// OS dark mode state cannot be executed. It can also return an error if the output
+/// cannot be parsed.
+pub(crate) fn is_dark_mode_active() -> Result<bool, MacOSError> {
+    info!("Checking if dark mode is active...");
+    let output = Command::new("defaults")
+        .arg("read")
+        .arg("-g")
+        .arg("AppleInterfaceStyle")
+        .output()
+        .map_err(|_| MacOSError::DarkModeError)?;
+    let output_str = String::from_utf8(output.stdout).map_err(|_| MacOSError::DarkModeError)?;
+    let dark_mode_enabled = match output_str.trim().to_lowercase().as_str() {
+        "dark" => true,
+        _ => false,
+    };
+    info!("Dark mode is active: {}", dark_mode_enabled);
+    Ok(dark_mode_enabled)
+}
+
 /// Retrieves the resolution of the main display in pixels.
 ///
 /// This function runs the `system_profiler` command with the `SPDisplaysDataType` and
@@ -203,6 +227,7 @@ fn get_key_value_pair_based_on_spaces<'a>(
 // --- Errors ---
 #[derive(Debug, PartialEq)]
 pub enum MacOSError {
+    DarkModeError,
     HomeEnvVarNotFound,
     MainDisplayNotFound,
     ResolutionNotFound,
@@ -212,6 +237,7 @@ pub enum MacOSError {
 impl std::fmt::Display for MacOSError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            MacOSError::DarkModeError => write!(f, "Unable to determine dark mode status"),
             MacOSError::HomeEnvVarNotFound => {
                 write!(f, "Unable to find $HOME environment variable")
             }
