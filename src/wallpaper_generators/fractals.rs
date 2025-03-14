@@ -4,7 +4,7 @@ use image::ImageBuffer;
 use log::{debug, info};
 use num_complex::Complex;
 use rand::{random_iter, random_range};
-use rayon::iter::ParallelIterator;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::path::PathBuf;
 
 pub fn generate_julia_set(
@@ -24,22 +24,18 @@ pub fn generate_julia_set(
     // Setup
     let julia_sets = vec![
         Complex::new(-0.79, 0.15),
-        // TODO: currently broken due to poor sample julia set function, re-add once fixed
-        // Complex::new(-0.162, 1.04),
         Complex::new(0.28, 0.008),
-        // TODO: currently broken due to poor sample julia set function, re-add once fixed
-        // Complex::new(0.3, -0.01),
         Complex::new(-1.476, 0.0),
         Complex::new(-0.12, -0.77),
         Complex::new(-0.70176, -0.3842),
         Complex::new(-0.4, 0.6),
         Complex::new(0.285, 0.01),
-        // TODO: currently broken due to poor sample julia set function, re-add once fixed
-        // Complex::new(0.0, 0.8),
         Complex::new(-0.835, 0.2321),
         Complex::new(-0.7269, 0.1889),
-        // TODO: currently broken due to poor sample julia set function, re-add once fixed
-        // Complex::new(0.4, 0.4),
+        Complex::new(0.4, 0.4),
+        Complex::new(-0.162, 1.04),
+        Complex::new(0.3, -0.01),
+        Complex::new(0.0, 0.8),
     ];
     let selected_julia_set = julia_sets[random_range(0..julia_sets.len())];
     debug!("Selected julia set: c={:?}", selected_julia_set);
@@ -80,33 +76,39 @@ pub fn generate_mandelbrot_set(width: u32, height: u32) -> () {
     todo!("Implement for generating mandelbrot set")
 }
 
-// TODO: optimize algorithm using multithreading
-// TODO: rethink this algorithm, I want it to be more random - aspect ratio will always be the same (what about aspect ratio and then random point between that)
-// I'd like to have sections and then in between those sections, randomly select a point
-// * * * *
-// * * * *
-// * * * *
-// * * * *
-// If sample results in dividing width and height by 2, then points (0,0) - (2,2) should be able to be selected, 1 at random
 fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f64>, u32)> {
+    info!("Sampling julia set...");
     let mut points_weights = vec![];
-    let mut i = 0;
+    let mut backoff_count = 0;
+    let backoff_max = 15;
+    // Means 200 iterations or more required to become a hotspot
+    let mut dynamic_threshold_for_point_to_be_selected = 200;
+    let threshold_decrease = 200 / backoff_max;
+    let segments = 10;
     let aspect_ratio = (width as f64 / height as f64).round() as u32;
-    while points_weights.is_empty() && i < 5 {
+
+    while points_weights.is_empty() && backoff_count < backoff_max {
+        debug!("Backoff count: {}, threshold: {}", backoff_count, dynamic_threshold_for_point_to_be_selected);
+
         // Algorithm
-        let height_ratio: u32 = 10 * (i + 1); // Backoff if fail to find points
-        let width_ratio = aspect_ratio * height_ratio;
-        let x_interval = width / width_ratio;
-        let y_interval = height / height_ratio;
+        let num_height_segments: u32 = segments * (backoff_count+1);
+        let num_width_segments = aspect_ratio * num_height_segments;
+        debug!("Segments: width: {}, height: {}", num_width_segments, num_height_segments);
+
+        let x_interval = width / num_width_segments;
+        let y_interval = height / num_height_segments;
+        debug!("Interval: x: {}, y: {}", x_interval, y_interval);
         let scaled_x = 3.0 / width as f64;
         let scaled_y = 3.5 / height as f64;
 
-        for i in 0..width_ratio {
-            for j in 0..height_ratio {
-                let x = x_interval * i + (x_interval / 2);
-                let y = y_interval * j + (y_interval / 2);
+        let points: Vec<(Complex<f64>, u32)> = (0..(num_width_segments * num_height_segments))
+            .into_par_iter()
+            .map(|iteration| {
+                let x = x_interval * (iteration % num_width_segments) + random_range(0..(x_interval / 2));
+                let y = y_interval * (iteration / num_width_segments) + random_range(0..(y_interval / 2));
                 let cx = x as f64 * scaled_x;
                 let cy = y as f64 * scaled_y;
+                // debug!("ITERATION: {} - x: {}, y: {}, cx: {}, cy: {}", iteration, x, y, cx, cy);
                 let mut z = Complex::new(cx, cy);
                 let mut i = 0;
                 while i < 255 && z.norm() <= 2.0 {
@@ -114,16 +116,35 @@ fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f6
                     i += 1;
                 }
 
-                // TODO: make this customizable
-                if i > 100 {
-                    points_weights.push((Complex::new(cx, cy), i));
+                if i > dynamic_threshold_for_point_to_be_selected {
+                    Some((Complex::new(cx, cy), i))
+                } else {
+                    None
                 }
-            }
-        }
+            })
+            .flatten()
+            .collect();
+
+        points_weights.extend(points);
 
         // Backoff increment
-        i += 1;
+        backoff_count += 1;
+        dynamic_threshold_for_point_to_be_selected -= threshold_decrease;
     }
     points_weights.sort_by(|(_, w1), (_, w2)| w2.cmp(w1));
+    info!("Found {} hotspots from sampling", points_weights.len());
     points_weights
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_sample_julia_set() {
+        let points = super::sample_julia_set(
+            super::Complex::new(0.4, 0.4),
+            800,
+            600,
+        );
+        assert!(!points.is_empty());
+    }
 }

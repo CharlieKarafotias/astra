@@ -8,7 +8,6 @@ use wallpaper_generators::generate_julia_set;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     Builder::from_env(Env::default().default_filter_or("info")).init();
-    // TODO: add logger
     // TODO: make into CLI
     let (width, height) = get_screen_resolution()?;
     let dark_mode_active = is_dark_mode_active()?;
