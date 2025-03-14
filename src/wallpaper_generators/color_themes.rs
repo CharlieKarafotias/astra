@@ -1,7 +1,8 @@
+use rand::Rng;
+use rand::distr::{Distribution, StandardUniform};
 use std::fmt::Display;
-use std::sync::LazyLock;
 
-pub(super) struct ColorTheme {
+pub struct ColorTheme {
     name: String,
     supports_dark_mode: bool,
     colors: Vec<[u8; 3]>,
@@ -44,8 +45,80 @@ impl Display for ColorTheme {
     }
 }
 
-// Created with help from ChatGPT
-static THEME_NEON_DREAMS: LazyLock<ColorTheme> = LazyLock::new(|| {
+pub struct ThemeSelector {
+    selected: ColorTheme,
+}
+
+impl ThemeSelector {
+    pub fn from_color_theme(theme: ColorTheme) -> ThemeSelector {
+        ThemeSelector { selected: theme }
+    }
+
+    pub fn random() -> ThemeSelector {
+        ThemeSelector::new(rand::random())
+    }
+
+    pub fn new(theme: ColorThemes) -> ThemeSelector {
+        match theme {
+            ColorThemes::NeonDreams => ThemeSelector::from_color_theme(theme_neon_dreams()),
+            ColorThemes::AuroraGlow => ThemeSelector::from_color_theme(theme_aurora_glow()),
+            ColorThemes::CyberSunset => ThemeSelector::from_color_theme(theme_cyber_sunset()),
+            ColorThemes::MysticForest => ThemeSelector::from_color_theme(theme_mystic_forest()),
+            ColorThemes::RetroPop => ThemeSelector::from_color_theme(theme_retro_pop()),
+            ColorThemes::OceanBreeze => ThemeSelector::from_color_theme(theme_ocean_breeze()),
+            ColorThemes::GalaxyVoyage => ThemeSelector::from_color_theme(theme_galaxy_voyage()),
+            ColorThemes::FireIce => ThemeSelector::from_color_theme(theme_fire_ice()),
+            ColorThemes::CandyCrush => ThemeSelector::from_color_theme(theme_candy_crush()),
+            ColorThemes::SunlitMeadow => ThemeSelector::from_color_theme(theme_sunlit_meadow()),
+        }
+    }
+    pub fn selected(&self) -> &ColorTheme {
+        &self.selected
+    }
+}
+
+impl Default for ThemeSelector {
+    fn default() -> Self {
+        ThemeSelector::random()
+    }
+}
+
+// Color themes
+// NOTE: Adding a new theme??? Make sure to update ColorThemes enum & theme count
+// Asserts will fail indicating places that need to be updated
+const THEME_COUNT: usize = 10;
+pub enum ColorThemes {
+    NeonDreams,
+    AuroraGlow,
+    CyberSunset,
+    MysticForest,
+    RetroPop,
+    OceanBreeze,
+    GalaxyVoyage,
+    FireIce,
+    CandyCrush,
+    SunlitMeadow,
+}
+
+impl Distribution<ColorThemes> for StandardUniform {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ColorThemes {
+        assert_eq!(THEME_COUNT, 10);
+        match rng.random_range(0..THEME_COUNT) {
+            0 => ColorThemes::NeonDreams,
+            1 => ColorThemes::AuroraGlow,
+            2 => ColorThemes::CyberSunset,
+            3 => ColorThemes::MysticForest,
+            4 => ColorThemes::RetroPop,
+            5 => ColorThemes::OceanBreeze,
+            6 => ColorThemes::GalaxyVoyage,
+            7 => ColorThemes::FireIce,
+            8 => ColorThemes::CandyCrush,
+            9 => ColorThemes::SunlitMeadow,
+            _ => unreachable!(),
+        }
+    }
+}
+fn theme_neon_dreams() -> ColorTheme {
     ColorTheme::new(
         "Neon Dreams".to_string(),
         true,
@@ -64,10 +137,9 @@ static THEME_NEON_DREAMS: LazyLock<ColorTheme> = LazyLock::new(|| {
             [255, 230, 80],
         ]),
     )
-});
+}
 
-// Created with help from ChatGPT
-static THEME_AURORA_GLOW: LazyLock<ColorTheme> = LazyLock::new(|| {
+fn theme_aurora_glow() -> ColorTheme {
     ColorTheme::new(
         "Aurora Glow".to_string(),
         true,
@@ -86,10 +158,9 @@ static THEME_AURORA_GLOW: LazyLock<ColorTheme> = LazyLock::new(|| {
             [255, 140, 0],
         ]),
     )
-});
+}
 
-// Created with help from ChatGPT
-static THEME_CYBER_SUNSET: LazyLock<ColorTheme> = LazyLock::new(|| {
+fn theme_cyber_sunset() -> ColorTheme {
     ColorTheme::new(
         "Cyber Sunset".to_string(),
         true,
@@ -108,10 +179,9 @@ static THEME_CYBER_SUNSET: LazyLock<ColorTheme> = LazyLock::new(|| {
             [204, 204, 0],
         ]),
     )
-});
+}
 
-// Created with help from ChatGPT
-pub(super) static THEME_MYSTIC_FOREST: LazyLock<ColorTheme> = LazyLock::new(|| {
+fn theme_mystic_forest() -> ColorTheme {
     ColorTheme::new(
         "Mystic Forest".to_string(),
         true,
@@ -130,10 +200,9 @@ pub(super) static THEME_MYSTIC_FOREST: LazyLock<ColorTheme> = LazyLock::new(|| {
             [0, 255, 127],
         ]),
     )
-});
+}
 
-// Created with help from ChatGPT
-pub(super) static THEME_RETRO_POP: LazyLock<ColorTheme> = LazyLock::new(|| {
+fn theme_retro_pop() -> ColorTheme {
     ColorTheme::new(
         "Retro Pop".to_string(),
         true,
@@ -152,10 +221,9 @@ pub(super) static THEME_RETRO_POP: LazyLock<ColorTheme> = LazyLock::new(|| {
             [122, 88, 181],
         ]),
     )
-});
+}
 
-// Created with help from ChatGPT
-pub(super) static THEME_OCEAN_BREEZE: LazyLock<ColorTheme> = LazyLock::new(|| {
+fn theme_ocean_breeze() -> ColorTheme {
     ColorTheme::new(
         "Ocean Breeze".to_string(),
         true,
@@ -174,10 +242,9 @@ pub(super) static THEME_OCEAN_BREEZE: LazyLock<ColorTheme> = LazyLock::new(|| {
             [100, 190, 190],
         ]),
     )
-});
+}
 
-// Created with help from ChatGPT
-pub(super) static THEME_GALAXY_VOYAGE: LazyLock<ColorTheme> = LazyLock::new(|| {
+fn theme_galaxy_voyage() -> ColorTheme {
     ColorTheme::new(
         "Galaxy Voyage".to_string(),
         true,
@@ -196,10 +263,9 @@ pub(super) static THEME_GALAXY_VOYAGE: LazyLock<ColorTheme> = LazyLock::new(|| {
             [189, 183, 107],
         ]),
     )
-});
+}
 
-// Created with help from ChatGPT
-pub(super) static THEME_FIRE_ICE: LazyLock<ColorTheme> = LazyLock::new(|| {
+fn theme_fire_ice() -> ColorTheme {
     ColorTheme::new(
         "Fire & Ice".to_string(),
         true,
@@ -218,10 +284,9 @@ pub(super) static THEME_FIRE_ICE: LazyLock<ColorTheme> = LazyLock::new(|| {
             [204, 102, 0],
         ]),
     )
-});
+}
 
-// Created with help from ChatGPT
-pub(super) static THEME_CANDY_CRUSH: LazyLock<ColorTheme> = LazyLock::new(|| {
+fn theme_candy_crush() -> ColorTheme {
     ColorTheme::new(
         "Candy Crush".to_string(),
         true,
@@ -240,10 +305,9 @@ pub(super) static THEME_CANDY_CRUSH: LazyLock<ColorTheme> = LazyLock::new(|| {
             [255, 160, 122],
         ]),
     )
-});
+}
 
-// Created with help from ChatGPT
-pub(super) static THEME_SUNLIT_MEADOW: LazyLock<ColorTheme> = LazyLock::new(|| {
+fn theme_sunlit_meadow() -> ColorTheme {
     ColorTheme::new(
         "Sunlit Meadow".to_string(),
         true,
@@ -262,19 +326,4 @@ pub(super) static THEME_SUNLIT_MEADOW: LazyLock<ColorTheme> = LazyLock::new(|| {
             [245, 222, 179],
         ]),
     )
-});
-
-pub(super) static THEMES: LazyLock<[&'static ColorTheme; 10]> = LazyLock::new(|| {
-    [
-        &*THEME_NEON_DREAMS,
-        &*THEME_AURORA_GLOW,
-        &*THEME_CYBER_SUNSET,
-        &*THEME_MYSTIC_FOREST,
-        &*THEME_RETRO_POP,
-        &*THEME_OCEAN_BREEZE,
-        &*THEME_GALAXY_VOYAGE,
-        &*THEME_FIRE_ICE,
-        &*THEME_CANDY_CRUSH,
-        &*THEME_SUNLIT_MEADOW,
-    ]
-});
+}

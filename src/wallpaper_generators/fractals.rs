@@ -1,11 +1,11 @@
-use super::color_themes::THEMES;
 use super::utils::{Operator, WallpaperGeneratorError, create_color_map, save_image, scale_image};
+use crate::wallpaper_generators::color_themes::ThemeSelector;
 use image::ImageBuffer;
 use log::{debug, info};
 use num_complex::Complex;
 use rand::{random_iter, random_range};
-use std::path::PathBuf;
 use rayon::iter::ParallelIterator;
+use std::path::PathBuf;
 
 pub fn generate_julia_set(
     width: u32,
@@ -13,7 +13,8 @@ pub fn generate_julia_set(
     dark_mode: bool,
 ) -> Result<PathBuf, WallpaperGeneratorError> {
     info!("Generating julia set...");
-    let selected_theme = THEMES[random_range(0..THEMES.len())];
+    let theme = ThemeSelector::random();
+    let selected_theme = theme.selected();
     info!("Theme: {selected_theme}");
     let color_map = create_color_map(
         Operator::Gradient,
@@ -22,13 +23,23 @@ pub fn generate_julia_set(
     );
     // Setup
     let julia_sets = vec![
+        Complex::new(-0.79, 0.15),
+        // TODO: currently broken due to poor sample julia set function, re-add once fixed
+        // Complex::new(-0.162, 1.04),
+        Complex::new(0.28, 0.008),
+        // TODO: currently broken due to poor sample julia set function, re-add once fixed
+        // Complex::new(0.3, -0.01),
+        Complex::new(-1.476, 0.0),
+        Complex::new(-0.12, -0.77),
         Complex::new(-0.70176, -0.3842),
         Complex::new(-0.4, 0.6),
         Complex::new(0.285, 0.01),
-        Complex::new(0.0, 0.8),
+        // TODO: currently broken due to poor sample julia set function, re-add once fixed
+        // Complex::new(0.0, 0.8),
         Complex::new(-0.835, 0.2321),
         Complex::new(-0.7269, 0.1889),
-        Complex::new(0.4, 0.4),
+        // TODO: currently broken due to poor sample julia set function, re-add once fixed
+        // Complex::new(0.4, 0.4),
     ];
     let selected_julia_set = julia_sets[random_range(0..julia_sets.len())];
     debug!("Selected julia set: c={:?}", selected_julia_set);
@@ -44,20 +55,22 @@ pub fn generate_julia_set(
     let mut imgbuf = ImageBuffer::new(width, height);
 
     // Generate full julia set
-    imgbuf.par_enumerate_pixels_mut().for_each(|(x, y, mut pixel)| {
-        let cx = x as f64 * (scale_x / width as f64) + start_x;
-        let cy = y as f64 * (scale_y / height as f64) + start_y;
+    imgbuf
+        .par_enumerate_pixels_mut()
+        .for_each(|(x, y, mut pixel)| {
+            let cx = x as f64 * (scale_x / width as f64) + start_x;
+            let cy = y as f64 * (scale_y / height as f64) + start_y;
 
-        let c = selected_julia_set;
-        let mut z = Complex::new(cx, cy);
+            let c = selected_julia_set;
+            let mut z = Complex::new(cx, cy);
 
-        let mut i = 0;
-        while i < 255 && z.norm() <= 2.0 {
-            z = z * z + c;
-            i += 1;
-        }
-        *pixel = image::Rgb(color_map[i]);
-    });
+            let mut i = 0;
+            while i < 255 && z.norm() <= 2.0 {
+                z = z * z + c;
+                i += 1;
+            }
+            *pixel = image::Rgb(color_map[i]);
+        });
 
     let path_to_saved_image = save_image(&imgbuf)?;
     Ok(path_to_saved_image)
