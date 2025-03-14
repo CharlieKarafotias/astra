@@ -5,8 +5,8 @@ use log::{debug, info};
 use num_complex::Complex;
 use rand::{random_iter, random_range};
 use std::path::PathBuf;
+use rayon::iter::ParallelIterator;
 
-// TODO: optimize algorithm using multithreading
 pub fn generate_julia_set(
     width: u32,
     height: u32,
@@ -44,25 +44,20 @@ pub fn generate_julia_set(
     let mut imgbuf = ImageBuffer::new(width, height);
 
     // Generate full julia set
-    for x in 0..width {
-        for y in 0..height {
-            let cx = x as f64 * (scale_x / width as f64) + start_x;
-            let cy = y as f64 * (scale_y / height as f64) + start_y;
+    imgbuf.par_enumerate_pixels_mut().for_each(|(x, y, mut pixel)| {
+        let cx = x as f64 * (scale_x / width as f64) + start_x;
+        let cy = y as f64 * (scale_y / height as f64) + start_y;
 
-            let c = selected_julia_set;
-            let mut z = Complex::new(cx, cy);
+        let c = selected_julia_set;
+        let mut z = Complex::new(cx, cy);
 
-            let mut i = 0;
-            while i < 255 && z.norm() <= 2.0 {
-                z = z * z + c;
-                i += 1;
-            }
-
-            let pixel = imgbuf.get_pixel_mut(x, y);
-
-            *pixel = image::Rgb(color_map[i]);
+        let mut i = 0;
+        while i < 255 && z.norm() <= 2.0 {
+            z = z * z + c;
+            i += 1;
         }
-    }
+        *pixel = image::Rgb(color_map[i]);
+    });
 
     let path_to_saved_image = save_image(&imgbuf)?;
     Ok(path_to_saved_image)
@@ -73,6 +68,13 @@ pub fn generate_mandelbrot_set(width: u32, height: u32) -> () {
 }
 
 // TODO: optimize algorithm using multithreading
+// TODO: rethink this algorithm, I want it to be more random - aspect ratio will always be the same (what about aspect ratio and then random point between that)
+// I'd like to have sections and then in between those sections, randomly select a point
+// * * * *
+// * * * *
+// * * * *
+// * * * *
+// If sample results in dividing width and height by 2, then points (0,0) - (2,2) should be able to be selected, 1 at random
 fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f64>, u32)> {
     let mut points_weights = vec![];
     let mut i = 0;
