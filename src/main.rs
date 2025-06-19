@@ -32,6 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             directory,
         }) => todo!("Implement clean command"),
         _ => {
+            // TODO: Ideally, there's preferences for types of images user likes and pref for how often to change wallpaper
+            // I think in install directions, should have option to call astra on startup of terminal and auto check if wallpaper needs to be changed based on some preference of how often
             let generators: [(
                 fn() -> Result<AstraImage, WallpaperGeneratorError>,
                 ImageType,
