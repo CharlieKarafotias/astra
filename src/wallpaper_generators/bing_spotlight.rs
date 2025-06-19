@@ -43,9 +43,9 @@ pub fn generate_bing_spotlight(verbose: bool) -> Result<AstraImage, WallpaperGen
         ));
     }
     if verbose {
-       println!("Received response with image URL"); 
+        println!("Received response with image URL");
     }
-    
+
     let image_info: ImageInfo = serde_json::from_str(&res.batchrsp.items[0].item)
         .map_err(|e| WallpaperGeneratorError::ParseError(e.to_string()))?;
     let image_url = image_info.ad.landscape_image.asset;
@@ -61,7 +61,7 @@ pub fn generate_bing_spotlight(verbose: bool) -> Result<AstraImage, WallpaperGen
     if verbose {
         println!("Image downloaded successfully");
     }
-    
+
     let loaded_image = image::load_from_memory(&image)
         .map_err(|e| WallpaperGeneratorError::ImageGenerationError(e.to_string()))?;
 

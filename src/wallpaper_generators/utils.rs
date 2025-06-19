@@ -50,13 +50,19 @@ pub fn delete_wallpapers(
     if delete_dir {
         remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
         if verbose {
-            println!("Deleted all images and directory {} successfully", path.display());
+            println!(
+                "Deleted all images and directory {} successfully",
+                path.display()
+            );
         }
     } else if delete_all {
         remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
         create_wallpaper_folder().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
         if verbose {
-            println!("Deleted all images from directory {} successfully", path.display());
+            println!(
+                "Deleted all images from directory {} successfully",
+                path.display()
+            );
         }
     } else {
         if let Some(days) = older_than_in_days {
@@ -84,12 +90,15 @@ pub fn delete_wallpapers(
                             }
                         }
                     }
-                    Err(_) => { 
+                    Err(_) => {
                         if verbose {
-                            println!("ERROR: Encountered file that is not an astra formatted image, skipping file... {}", entry.path().display());
+                            println!(
+                                "ERROR: Encountered file that is not an astra formatted image, skipping file... {}",
+                                entry.path().display()
+                            );
                         }
-                        continue
-                    },
+                        continue;
+                    }
                 };
             }
         }

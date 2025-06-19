@@ -15,14 +15,17 @@ use wallpaper_generators::{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let verbose = cli.verbose;
-    
+
     match cli.command {
         Some(Commands::Clean {
             older_than,
             directory,
         }) => {
             if verbose {
-                println!("Deleting images older than {} days", older_than.unwrap_or(0));
+                println!(
+                    "Deleting images older than {} days",
+                    older_than.unwrap_or(0)
+                );
             }
             if let Some(older_than) = older_than {
                 delete_wallpapers(false, directory, Some(older_than), verbose)?;
@@ -69,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn save_image_to_astra_folder(
     image: &ImageType,
     image_buf: &AstraImage,
-    verbose: bool
+    verbose: bool,
 ) -> Result<PathBuf, WallpaperGeneratorError> {
     let prefix = match image {
         ImageType::Spotlight => "spotlight",
@@ -90,12 +93,14 @@ fn handle_generate_options(
     image: ImageType,
     no_save: bool,
     no_update: bool,
-    verbose: bool
+    verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Handle options
     if !no_update {
         if verbose {
-            println!("Saving image to astra_wallpapers folder (this is required to update wallpaper)");
+            println!(
+                "Saving image to astra_wallpapers folder (this is required to update wallpaper)"
+            );
         }
         // Updating requires a saved image
         let saved_image_path = save_image_to_astra_folder(&image, &image_buf, verbose)?;

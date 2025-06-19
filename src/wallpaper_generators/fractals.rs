@@ -15,19 +15,19 @@ pub fn generate_julia_set(verbose: bool) -> Result<AstraImage, WallpaperGenerato
     if verbose {
         println!("Detected screen resolution: {}x{}", width, height);
     }
-    
+
     let dark_mode =
         is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
     if verbose {
         println!("Is dark mode active: {}", dark_mode);
     }
-    
+
     let theme = ThemeSelector::random();
     let selected_theme = theme.selected();
     if verbose {
         println!("{selected_theme}");
     }
-    
+
     let color_map = create_color_map(
         Operator::Gradient,
         256,
