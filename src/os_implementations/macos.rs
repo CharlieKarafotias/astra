@@ -1,4 +1,3 @@
-use log::{debug, info};
 use std::{env, error::Error, path::PathBuf, process::Command};
 // --- OS specific code ---
 
@@ -10,7 +9,6 @@ use std::{env, error::Error, path::PathBuf, process::Command};
 /// OS dark mode state cannot be executed. It can also return an error if the output
 /// cannot be parsed.
 pub(crate) fn is_dark_mode_active() -> Result<bool, MacOSError> {
-    info!("Checking if dark mode is active...");
     let output = Command::new("defaults")
         .arg("read")
         .arg("-g")
@@ -22,7 +20,6 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, MacOSError> {
         "dark" => true,
         _ => false,
     };
-    info!("Dark mode is active: {}", dark_mode_enabled);
     Ok(dark_mode_enabled)
 }
 
@@ -46,7 +43,6 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, MacOSError> {
 /// the `system_profiler` command, this function will return an `Err` containing a
 /// `MacOSError` with the `ResolutionNotFound` variant.
 pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
-    info!("Getting screen resolution...");
     let output = Command::new("system_profiler")
         .arg("SPDisplaysDataType")
         .arg("-detailLevel")
@@ -55,7 +51,6 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
         .map_err(|_| MacOSError::SystemProfilerError)?;
 
     let (width, height) = parse_output(&String::from_utf8_lossy(&output.stdout))?;
-    debug!("Screen resolution: {}x{}", width, height);
     Ok((width, height))
 }
 
@@ -69,7 +64,6 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
 /// If the `osascript` command cannot be executed for any reason, this function will return an
 /// `Err` containing a `MacOSError` with the `SystemProfilerError` variant.
 pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
-    info!("Updating wallpaper...");
     let script = format!(
         "tell application \"System Events\" to set picture of every desktop to POSIX file {:?}",
         path.as_os_str().to_os_string()
@@ -92,7 +86,6 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
 pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, MacOSError> {
     let home_dir = env::var("HOME").map_err(|_| MacOSError::HomeEnvVarNotFound)?;
     let desktop_path = PathBuf::from(home_dir).join("Desktop");
-    debug!("Desktop path: {}", desktop_path.display());
     Ok(desktop_path)
 }
 // --- OS specific code ---

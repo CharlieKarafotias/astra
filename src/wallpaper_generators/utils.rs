@@ -1,12 +1,14 @@
-use crate::os_implementations::path_to_desktop_folder;
+use super::super::os_implementations::path_to_desktop_folder;
 use image::{ImageBuffer, Rgb};
-use log::{debug, info};
+use std::fs::remove_dir_all;
 use std::{
     error::Error,
     fs::create_dir_all,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+pub type AstraImage = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
 /// Creates a folder named "astra_wallpapers" on the desktop.
 ///
@@ -15,12 +17,85 @@ use std::{
 /// A `Result` containing the path to the created folder on success, or a
 /// `WallpaperGeneratorError` on failure.
 pub(super) fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorError> {
-    info!("Preparing astra_wallpaper folder on desktop...");
     let path = path_to_desktop_folder()
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
         .join("astra_wallpapers");
     create_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
     Ok(path)
+}
+
+/// Deletes wallpapers from the "astra_wallpapers" folder.
+///
+/// # Arguments
+///
+/// * `delete_all` - If true, deletes all wallpapers and the "astra_wallpapers" folder.
+/// * `delete_dir` - If true, deletes the "astra_wallpapers" folder.
+/// * `older_than_in_days` - If set, deletes wallpapers older than the specified number of days.
+///
+/// # Returns
+///
+/// A `Result` containing `()` on success, or a `WallpaperGeneratorError` on failure.
+pub fn delete_wallpapers(
+    delete_all: bool,
+    delete_dir: bool,
+    older_than_in_days: Option<u64>,
+    verbose: bool,
+) -> Result<(), WallpaperGeneratorError> {
+    let path = path_to_desktop_folder()
+        .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
+        .join("astra_wallpapers");
+    if verbose {
+        println!("Deleting wallpapers from {}", path.display());
+    }
+    if delete_dir {
+        remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        if verbose {
+            println!("Deleted all images and directory {} successfully", path.display());
+        }
+    } else if delete_all {
+        remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        create_wallpaper_folder().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        if verbose {
+            println!("Deleted all images from directory {} successfully", path.display());
+        }
+    } else {
+        if let Some(days) = older_than_in_days {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
+                .as_secs();
+            let older_than_sec = days * 24 * 60 * 60;
+            let oldest_timestamp_to_keep = now - older_than_sec;
+            for entry in std::fs::read_dir(&path)
+                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
+            {
+                let entry = entry.map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+                let file_name = entry.file_name().to_string_lossy().to_string();
+                // string like spotlight_1640000000.png
+                let timestamp_str = &file_name
+                    [file_name.rfind('_').map(|i| i + 1).unwrap_or(0)..file_name.len() - 4];
+                match timestamp_str.parse::<u64>() {
+                    Ok(timestamp) => {
+                        if timestamp < oldest_timestamp_to_keep {
+                            std::fs::remove_file(entry.path())
+                                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+                            if verbose {
+                                println!("Deleted image {} successfully", entry.path().display());
+                            }
+                        }
+                    }
+                    Err(_) => { 
+                        if verbose {
+                            println!("ERROR: Encountered file that is not an astra formatted image, skipping file... {}", entry.path().display());
+                        }
+                        continue
+                    },
+                };
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Enum that specifies the color map generation algorithm
@@ -100,10 +175,7 @@ fn mix_color(color1: [u8; 3], color2: [u8; 3], weight_color_2: f64) -> [u8; 3] {
 ///
 /// A `Result` containing the path to the saved image on success, or a
 /// `WallpaperGeneratorError` on failure.
-pub(super) fn save_image(
-    prefix: &str,
-    image: &ImageBuffer<Rgb<u8>, Vec<u8>>,
-) -> Result<PathBuf, WallpaperGeneratorError> {
+pub fn save_image(prefix: &str, image: &AstraImage) -> Result<PathBuf, WallpaperGeneratorError> {
     let mut save_path = create_wallpaper_folder()?;
 
     let time = SystemTime::now()
@@ -111,7 +183,6 @@ pub(super) fn save_image(
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
 
     save_path = save_path.join(format!("{prefix}_{}.png", time.as_secs().to_string()));
-    debug!("Saving image to: {}", save_path.display());
     image
         .save(&save_path)
         .map_err(|_| WallpaperGeneratorError::ImageSaveError)?;
@@ -158,7 +229,7 @@ pub(super) fn scale_image(
 
 // --- Errors ---
 #[derive(Debug, PartialEq)]
-pub(crate) enum WallpaperGeneratorError {
+pub enum WallpaperGeneratorError {
     ImageGenerationError(String),
     ImageSaveError,
     NetworkError(String),
