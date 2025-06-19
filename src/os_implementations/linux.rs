@@ -1,4 +1,3 @@
-use crate::os_implementations::MacOSError;
 use std::path::PathBuf;
 // --- OS specific code ---
 pub(crate) fn is_dark_mode_active() -> bool {
