@@ -1,5 +1,6 @@
 use super::super::os_implementations::path_to_desktop_folder;
 use image::{ImageBuffer, Rgb};
+use std::fs::remove_dir_all;
 use std::{
     error::Error,
     fs::create_dir_all,
@@ -21,6 +22,62 @@ pub(super) fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorErr
         .join("astra_wallpapers");
     create_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
     Ok(path)
+}
+
+/// Deletes wallpapers from the "astra_wallpapers" folder.
+///
+/// # Arguments
+///
+/// * `delete_all` - If true, deletes all wallpapers and the "astra_wallpapers" folder.
+/// * `delete_dir` - If true, deletes the "astra_wallpapers" folder.
+/// * `older_than_in_days` - If set, deletes wallpapers older than the specified number of days.
+///
+/// # Returns
+///
+/// A `Result` containing `()` on success, or a `WallpaperGeneratorError` on failure.
+pub fn delete_wallpapers(
+    delete_all: bool,
+    delete_dir: bool,
+    older_than_in_days: Option<u64>,
+) -> Result<(), WallpaperGeneratorError> {
+    let path = path_to_desktop_folder()
+        .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
+        .join("astra_wallpapers");
+    if delete_dir {
+        remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+    } else if delete_all {
+        remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        create_wallpaper_folder().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+    } else {
+        if let Some(days) = older_than_in_days {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
+                .as_secs();
+            let older_than_sec = days * 24 * 60 * 60;
+            let oldest_timestamp_to_keep = now - older_than_sec;
+            for entry in std::fs::read_dir(&path)
+                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
+            {
+                let entry = entry.map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+                let file_name = entry.file_name().to_string_lossy().to_string();
+                // string like spotlight_1640000000.png
+                let timestamp_str = &file_name
+                    [file_name.rfind('_').map(|i| i + 1).unwrap_or(0)..file_name.len() - 4];
+                match timestamp_str.parse::<u64>() {
+                    Ok(timestamp) => {
+                        if timestamp < oldest_timestamp_to_keep {
+                            std::fs::remove_file(entry.path())
+                                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+                        }
+                    }
+                    Err(_) => continue,
+                };
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Enum that specifies the color map generation algorithm

@@ -14,8 +14,8 @@ pub enum Commands {
     Clean {
         #[arg(short, long)]
         /// Delete images older than X days
-        older_than: Option<u32>,
-        #[arg(short, long)]
+        older_than: Option<u64>,
+        #[arg(short, long, default_value_t = false)]
         /// Deletes all images and the "astra_wallpapers" directory
         directory: bool,
     },

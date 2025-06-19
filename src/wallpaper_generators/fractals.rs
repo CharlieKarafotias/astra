@@ -47,22 +47,20 @@ pub fn generate_julia_set() -> Result<AstraImage, WallpaperGeneratorError> {
     let mut imgbuf = ImageBuffer::new(width, height);
 
     // Generate full julia set
-    imgbuf
-        .par_enumerate_pixels_mut()
-        .for_each(|(x, y, pixel)| {
-            let cx = x as f64 * (scale_x / width as f64) + start_x;
-            let cy = y as f64 * (scale_y / height as f64) + start_y;
+    imgbuf.par_enumerate_pixels_mut().for_each(|(x, y, pixel)| {
+        let cx = x as f64 * (scale_x / width as f64) + start_x;
+        let cy = y as f64 * (scale_y / height as f64) + start_y;
 
-            let c = selected_julia_set;
-            let mut z = Complex::new(cx, cy);
+        let c = selected_julia_set;
+        let mut z = Complex::new(cx, cy);
 
-            let mut i = 0;
-            while i < 255 && z.norm() <= 2.0 {
-                z = z * z + c;
-                i += 1;
-            }
-            *pixel = Rgb(color_map[i]);
-        });
+        let mut i = 0;
+        while i < 255 && z.norm() <= 2.0 {
+            z = z * z + c;
+            i += 1;
+        }
+        *pixel = Rgb(color_map[i]);
+    });
 
     Ok(imgbuf)
 }
