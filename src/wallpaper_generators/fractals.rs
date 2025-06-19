@@ -68,7 +68,7 @@ pub fn generate_julia_set(
             *pixel = image::Rgb(color_map[i]);
         });
 
-    let path_to_saved_image = save_image(&imgbuf)?;
+    let path_to_saved_image = save_image("julia", &imgbuf)?;
     Ok(path_to_saved_image)
 }
 
@@ -88,12 +88,18 @@ fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f6
     let aspect_ratio = (width as f64 / height as f64).round() as u32;
 
     while points_weights.is_empty() && backoff_count < backoff_max {
-        debug!("Backoff count: {}, threshold: {}", backoff_count, dynamic_threshold_for_point_to_be_selected);
+        debug!(
+            "Backoff count: {}, threshold: {}",
+            backoff_count, dynamic_threshold_for_point_to_be_selected
+        );
 
         // Algorithm
-        let num_height_segments: u32 = segments * (backoff_count+1);
+        let num_height_segments: u32 = segments * (backoff_count + 1);
         let num_width_segments = aspect_ratio * num_height_segments;
-        debug!("Segments: width: {}, height: {}", num_width_segments, num_height_segments);
+        debug!(
+            "Segments: width: {}, height: {}",
+            num_width_segments, num_height_segments
+        );
 
         let x_interval = width / num_width_segments;
         let y_interval = height / num_height_segments;
@@ -104,8 +110,10 @@ fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f6
         let points: Vec<(Complex<f64>, u32)> = (0..(num_width_segments * num_height_segments))
             .into_par_iter()
             .map(|iteration| {
-                let x = x_interval * (iteration % num_width_segments) + random_range(0..(x_interval / 2));
-                let y = y_interval * (iteration / num_width_segments) + random_range(0..(y_interval / 2));
+                let x = x_interval * (iteration % num_width_segments)
+                    + random_range(0..(x_interval / 2));
+                let y = y_interval * (iteration / num_width_segments)
+                    + random_range(0..(y_interval / 2));
                 let cx = x as f64 * scaled_x;
                 let cy = y as f64 * scaled_y;
                 // debug!("ITERATION: {} - x: {}, y: {}, cx: {}, cy: {}", iteration, x, y, cx, cy);
@@ -140,11 +148,7 @@ fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f6
 mod tests {
     #[test]
     fn test_sample_julia_set() {
-        let points = super::sample_julia_set(
-            super::Complex::new(0.4, 0.4),
-            800,
-            600,
-        );
+        let points = super::sample_julia_set(super::Complex::new(0.4, 0.4), 800, 600);
         assert!(!points.is_empty());
     }
 }

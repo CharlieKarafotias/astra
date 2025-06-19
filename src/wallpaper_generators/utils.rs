@@ -93,6 +93,7 @@ fn mix_color(color1: [u8; 3], color2: [u8; 3], weight_color_2: f64) -> [u8; 3] {
 ///
 /// # Arguments
 ///
+/// * `prefix` - A string to prepend to the file name.
 /// * `image` - A reference to the `ImageBuffer` containing the image to save.
 ///
 /// # Returns
@@ -100,6 +101,7 @@ fn mix_color(color1: [u8; 3], color2: [u8; 3], weight_color_2: f64) -> [u8; 3] {
 /// A `Result` containing the path to the saved image on success, or a
 /// `WallpaperGeneratorError` on failure.
 pub(super) fn save_image(
+    prefix: &str,
     image: &ImageBuffer<Rgb<u8>, Vec<u8>>,
 ) -> Result<PathBuf, WallpaperGeneratorError> {
     let mut save_path = create_wallpaper_folder()?;
@@ -108,7 +110,7 @@ pub(super) fn save_image(
         .duration_since(UNIX_EPOCH)
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
 
-    save_path = save_path.join(format!("julia_{}.png", time.as_secs().to_string()));
+    save_path = save_path.join(format!("{prefix}_{}.png", time.as_secs().to_string()));
     debug!("Saving image to: {}", save_path.display());
     image
         .save(&save_path)
@@ -157,18 +159,30 @@ pub(super) fn scale_image(
 // --- Errors ---
 #[derive(Debug, PartialEq)]
 pub(crate) enum WallpaperGeneratorError {
+    ImageGenerationError(String),
     ImageSaveError,
+    NetworkError(String),
     OSError(String),
+    ParseError(String),
 }
 
 impl std::fmt::Display for WallpaperGeneratorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            WallpaperGeneratorError::ImageGenerationError(msg) => {
+                write!(f, "Image Generation Error: {}", msg)
+            }
             WallpaperGeneratorError::ImageSaveError => {
                 write!(f, "Failed to save image to file")
             }
+            WallpaperGeneratorError::NetworkError(msg) => {
+                write!(f, "Network Error: {}", msg)
+            }
             WallpaperGeneratorError::OSError(msg) => {
                 write!(f, "OS Error: {}", msg)
+            }
+            WallpaperGeneratorError::ParseError(msg) => {
+                write!(f, "Parse Error: {}", msg)
             }
         }
     }
