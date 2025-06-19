@@ -39,15 +39,25 @@ pub fn delete_wallpapers(
     delete_all: bool,
     delete_dir: bool,
     older_than_in_days: Option<u64>,
+    verbose: bool,
 ) -> Result<(), WallpaperGeneratorError> {
     let path = path_to_desktop_folder()
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
         .join("astra_wallpapers");
+    if verbose {
+        println!("Deleting wallpapers from {}", path.display());
+    }
     if delete_dir {
         remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        if verbose {
+            println!("Deleted all images and directory {} successfully", path.display());
+        }
     } else if delete_all {
         remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
         create_wallpaper_folder().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        if verbose {
+            println!("Deleted all images from directory {} successfully", path.display());
+        }
     } else {
         if let Some(days) = older_than_in_days {
             let now = SystemTime::now()
@@ -69,9 +79,17 @@ pub fn delete_wallpapers(
                         if timestamp < oldest_timestamp_to_keep {
                             std::fs::remove_file(entry.path())
                                 .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+                            if verbose {
+                                println!("Deleted image {} successfully", entry.path().display());
+                            }
                         }
                     }
-                    Err(_) => continue,
+                    Err(_) => { 
+                        if verbose {
+                            println!("ERROR: Encountered file that is not an astra formatted image, skipping file... {}", entry.path().display());
+                        }
+                        continue
+                    },
                 };
             }
         }

@@ -6,14 +6,28 @@ use num_complex::Complex;
 use rand::random_range;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-pub fn generate_julia_set() -> Result<AstraImage, WallpaperGeneratorError> {
+pub fn generate_julia_set(verbose: bool) -> Result<AstraImage, WallpaperGeneratorError> {
+    if verbose {
+        println!("Generating julia set...");
+    }
     let (width, height) =
         get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+    if verbose {
+        println!("Detected screen resolution: {}x{}", width, height);
+    }
+    
     let dark_mode =
         is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
-
+    if verbose {
+        println!("Is dark mode active: {}", dark_mode);
+    }
+    
     let theme = ThemeSelector::random();
     let selected_theme = theme.selected();
+    if verbose {
+        println!("{selected_theme}");
+    }
+    
     let color_map = create_color_map(
         Operator::Gradient,
         256,
@@ -36,16 +50,25 @@ pub fn generate_julia_set() -> Result<AstraImage, WallpaperGeneratorError> {
         Complex::new(0.0, 0.8),
     ];
     let selected_julia_set = julia_sets[random_range(0..julia_sets.len())];
+    if verbose {
+        println!("Selected julia set: {}", selected_julia_set);
+    }
 
     // Find hotspots and randomly select one
     let points_weights = sample_julia_set(selected_julia_set, width, height);
     let complex_hotspot = points_weights[random_range(0..points_weights.len())].0;
+    if verbose {
+        println!("Selected hotspot: {}", complex_hotspot);
+    }
 
     let focus_pt = (complex_hotspot.re, complex_hotspot.im);
     let (scale_x, scale_y, start_x, start_y) =
         scale_image(3.0, 3.5, focus_pt, random_range(1.0..10.0));
     let mut imgbuf = ImageBuffer::new(width, height);
 
+    if verbose {
+        println!("Generating image...");
+    }
     // Generate full julia set
     imgbuf.par_enumerate_pixels_mut().for_each(|(x, y, pixel)| {
         let cx = x as f64 * (scale_x / width as f64) + start_x;
@@ -61,6 +84,10 @@ pub fn generate_julia_set() -> Result<AstraImage, WallpaperGeneratorError> {
         }
         *pixel = Rgb(color_map[i]);
     });
+
+    if verbose {
+        println!("Image generated!");
+    }
 
     Ok(imgbuf)
 }

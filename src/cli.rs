@@ -6,6 +6,9 @@ pub struct Cli {
     #[command(subcommand)]
     /// Subcommands
     pub(crate) command: Option<Commands>,
+    #[arg(short, long)]
+    /// Verbose output
+    pub(crate) verbose: bool,
 }
 
 #[derive(Subcommand)]
@@ -32,7 +35,7 @@ pub enum Commands {
     },
 }
 
-#[derive(Clone, ValueEnum)]
+#[derive(Clone, ValueEnum, Debug)]
 pub enum ImageType {
     /// Sets wallpaper to one of Bing's daily Spotlight images
     Spotlight,
