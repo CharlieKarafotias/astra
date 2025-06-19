@@ -1,12 +1,13 @@
-use crate::os_implementations::path_to_desktop_folder;
+use super::super::os_implementations::path_to_desktop_folder;
 use image::{ImageBuffer, Rgb};
-use log::{debug, info};
 use std::{
     error::Error,
     fs::create_dir_all,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+pub type AstraImage = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
 /// Creates a folder named "astra_wallpapers" on the desktop.
 ///
@@ -15,7 +16,6 @@ use std::{
 /// A `Result` containing the path to the created folder on success, or a
 /// `WallpaperGeneratorError` on failure.
 pub(super) fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorError> {
-    info!("Preparing astra_wallpaper folder on desktop...");
     let path = path_to_desktop_folder()
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
         .join("astra_wallpapers");
@@ -100,10 +100,7 @@ fn mix_color(color1: [u8; 3], color2: [u8; 3], weight_color_2: f64) -> [u8; 3] {
 ///
 /// A `Result` containing the path to the saved image on success, or a
 /// `WallpaperGeneratorError` on failure.
-pub(super) fn save_image(
-    prefix: &str,
-    image: &ImageBuffer<Rgb<u8>, Vec<u8>>,
-) -> Result<PathBuf, WallpaperGeneratorError> {
+pub fn save_image(prefix: &str, image: &AstraImage) -> Result<PathBuf, WallpaperGeneratorError> {
     let mut save_path = create_wallpaper_folder()?;
 
     let time = SystemTime::now()
@@ -111,7 +108,6 @@ pub(super) fn save_image(
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
 
     save_path = save_path.join(format!("{prefix}_{}.png", time.as_secs().to_string()));
-    debug!("Saving image to: {}", save_path.display());
     image
         .save(&save_path)
         .map_err(|_| WallpaperGeneratorError::ImageSaveError)?;
@@ -158,7 +154,7 @@ pub(super) fn scale_image(
 
 // --- Errors ---
 #[derive(Debug, PartialEq)]
-pub(crate) enum WallpaperGeneratorError {
+pub enum WallpaperGeneratorError {
     ImageGenerationError(String),
     ImageSaveError,
     NetworkError(String),

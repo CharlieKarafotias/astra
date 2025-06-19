@@ -1,21 +1,19 @@
-use super::utils::{Operator, WallpaperGeneratorError, create_color_map, save_image, scale_image};
+use super::super::os_implementations::{get_screen_resolution, is_dark_mode_active};
+use super::utils::{AstraImage, Operator, WallpaperGeneratorError, create_color_map, scale_image};
 use crate::wallpaper_generators::color_themes::ThemeSelector;
-use image::ImageBuffer;
-use log::{debug, info};
+use image::{ImageBuffer, Rgb};
 use num_complex::Complex;
-use rand::{random_iter, random_range};
+use rand::random_range;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::path::PathBuf;
 
-pub fn generate_julia_set(
-    width: u32,
-    height: u32,
-    dark_mode: bool,
-) -> Result<PathBuf, WallpaperGeneratorError> {
-    info!("Generating julia set...");
+pub fn generate_julia_set() -> Result<AstraImage, WallpaperGeneratorError> {
+    let (width, height) =
+        get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+    let dark_mode =
+        is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+
     let theme = ThemeSelector::random();
     let selected_theme = theme.selected();
-    info!("Theme: {selected_theme}");
     let color_map = create_color_map(
         Operator::Gradient,
         256,
@@ -38,12 +36,10 @@ pub fn generate_julia_set(
         Complex::new(0.0, 0.8),
     ];
     let selected_julia_set = julia_sets[random_range(0..julia_sets.len())];
-    debug!("Selected julia set: c={:?}", selected_julia_set);
 
     // Find hotspots and randomly select one
     let points_weights = sample_julia_set(selected_julia_set, width, height);
     let complex_hotspot = points_weights[random_range(0..points_weights.len())].0;
-    debug!("Selected hotspot: z={:?}", complex_hotspot);
 
     let focus_pt = (complex_hotspot.re, complex_hotspot.im);
     let (scale_x, scale_y, start_x, start_y) =
@@ -53,7 +49,7 @@ pub fn generate_julia_set(
     // Generate full julia set
     imgbuf
         .par_enumerate_pixels_mut()
-        .for_each(|(x, y, mut pixel)| {
+        .for_each(|(x, y, pixel)| {
             let cx = x as f64 * (scale_x / width as f64) + start_x;
             let cy = y as f64 * (scale_y / height as f64) + start_y;
 
@@ -65,19 +61,13 @@ pub fn generate_julia_set(
                 z = z * z + c;
                 i += 1;
             }
-            *pixel = image::Rgb(color_map[i]);
+            *pixel = Rgb(color_map[i]);
         });
 
-    let path_to_saved_image = save_image("julia", &imgbuf)?;
-    Ok(path_to_saved_image)
-}
-
-pub fn generate_mandelbrot_set(width: u32, height: u32) -> () {
-    todo!("Implement for generating mandelbrot set")
+    Ok(imgbuf)
 }
 
 fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f64>, u32)> {
-    info!("Sampling julia set...");
     let mut points_weights = vec![];
     let mut backoff_count = 0;
     let backoff_max = 15;
@@ -88,22 +78,11 @@ fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f6
     let aspect_ratio = (width as f64 / height as f64).round() as u32;
 
     while points_weights.is_empty() && backoff_count < backoff_max {
-        debug!(
-            "Backoff count: {}, threshold: {}",
-            backoff_count, dynamic_threshold_for_point_to_be_selected
-        );
-
         // Algorithm
         let num_height_segments: u32 = segments * (backoff_count + 1);
         let num_width_segments = aspect_ratio * num_height_segments;
-        debug!(
-            "Segments: width: {}, height: {}",
-            num_width_segments, num_height_segments
-        );
-
         let x_interval = width / num_width_segments;
         let y_interval = height / num_height_segments;
-        debug!("Interval: x: {}, y: {}", x_interval, y_interval);
         let scaled_x = 3.0 / width as f64;
         let scaled_y = 3.5 / height as f64;
 
@@ -140,7 +119,6 @@ fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f6
         dynamic_threshold_for_point_to_be_selected -= threshold_decrease;
     }
     points_weights.sort_by(|(_, w1), (_, w2)| w2.cmp(w1));
-    info!("Found {} hotspots from sampling", points_weights.len());
     points_weights
 }
 

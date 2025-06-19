@@ -1,11 +1,11 @@
-use super::utils::{WallpaperGeneratorError, save_image};
+use super::utils::{AstraImage, WallpaperGeneratorError};
 use serde::Deserialize;
-use std::path::PathBuf;
 
 /// Generates a wallpaper from the Bing Spotlight API. The API provides a
-/// photo of the day, which is used as the wallpaper (same as Windows 11 Spotlight). 
+/// photo of the day, which is used as the wallpaper (same as Windows 11 Spotlight).
 /// The image is downloaded from the URL and saved to the desktop wallpaper
-/// folder with a name of the form "bing_spotlight_<unix_timestamp>.png".
+/// folder with a name of the form "spotlight_<unix_timestamp>.png"
+/// (if save and update are true).
 ///
 /// All credit goes to Spotlight Downloader project for the helpful documentation on the API used
 /// [Spotlight Downloader project](https://github.com/ORelio/Spotlight-Downloader).
@@ -26,7 +26,7 @@ use std::path::PathBuf;
 ///   failed to parse.
 /// * `NetworkError`: The API request failed.
 /// * `ParseError`: The JSON response from the API failed to parse.
-pub fn generate_bing_spotlight() -> Result<PathBuf, WallpaperGeneratorError> {
+pub fn generate_bing_spotlight() -> Result<AstraImage, WallpaperGeneratorError> {
     // Credit to Spotlight Downloader project for API reference
     // https://github.com/ORelio/Spotlight-Downloader/blob/master/SpotlightAPI.md
     let res = reqwest::blocking::get("https://fd.api.iris.microsoft.com/v4/api/selection?&placement=88000820&bcnt=1&country=US&locale=en-US&fmt=json")
@@ -48,43 +48,40 @@ pub fn generate_bing_spotlight() -> Result<PathBuf, WallpaperGeneratorError> {
         .bytes()
         .map_err(|e| WallpaperGeneratorError::NetworkError(e.to_string()))?
         .to_vec();
-
     let loaded_image = image::load_from_memory(&image)
         .map_err(|e| WallpaperGeneratorError::ImageGenerationError(e.to_string()))?;
-    let path_to_saved_image = save_image("bing_spotlight", &loaded_image.to_rgb8())?;
-    Ok(path_to_saved_image)
+
+    Ok(loaded_image.to_rgb8())
 }
 
-
 // Request and response structs
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 struct SpotlightResponse {
     batchrsp: ResponsePayload,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 struct ResponsePayload {
-    ver: String,
     items: Vec<Item>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 struct Item {
     item: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 struct ImageInfo {
     ad: AdInfo,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 struct AdInfo {
     #[serde(rename = "landscapeImage")]
     landscape_image: LandscapeImage,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 struct LandscapeImage {
     asset: String,
 }

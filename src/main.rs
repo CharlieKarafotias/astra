@@ -1,23 +1,71 @@
+mod cli;
 mod os_implementations;
 mod wallpaper_generators;
 
-use env_logger::{self, Builder, Env};
-use log::info;
-use os_implementations::{get_screen_resolution, is_dark_mode_active, update_wallpaper};
-use wallpaper_generators::{generate_bing_spotlight, generate_julia_set};
+use clap::Parser;
+use cli::{Cli, Commands, ImageType};
+use os_implementations::update_wallpaper;
+use rand::random_range;
+use std::path::PathBuf;
+use wallpaper_generators::{
+    AstraImage, WallpaperGeneratorError, generate_bing_spotlight, generate_julia_set, save_image,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    Builder::from_env(Env::default().default_filter_or("info")).init();
-    // TODO: make into CLI
-    let (width, height) = get_screen_resolution()?;
+    let cli = Cli::parse();
 
-    // TODO: in cli use this for julia set options
-    // let dark_mode_active = is_dark_mode_active()?;
-    // let saved_image_path = generate_julia_set(width, height, dark_mode_active)?;
+    let (image_buf, image, no_save, no_update) = match &cli.command {
+        Some(Commands::Generate {
+            image,
+            no_save,
+            no_update,
+        }) => {
+            // Generate correct image
+            let image_buf = match image {
+                ImageType::Spotlight => generate_bing_spotlight(),
+                ImageType::Julia => generate_julia_set(),
+            }?;
+            (image_buf, image.clone(), *no_save, *no_update)
+        }
+        Some(Commands::Clean {
+            older_than,
+            directory,
+        }) => todo!("Implement clean command"),
+        _ => {
+            let generators: [(
+                fn() -> Result<AstraImage, WallpaperGeneratorError>,
+                ImageType,
+            ); 2] = [
+                (generate_bing_spotlight, ImageType::Spotlight),
+                (generate_julia_set, ImageType::Julia),
+            ];
+            let index = random_range(0..generators.len());
+            let image_buf = generators[index].0()?;
+            let image_type = generators[index].1.clone();
+            (image_buf, image_type, false, false)
+        }
+    };
 
-    // TODO: in cli use this for bing spotlight
-    let saved_image_path = generate_bing_spotlight()?;
-    info!("Image saved to: {}", saved_image_path.display());
-    update_wallpaper(saved_image_path)?;
+    // Handle options
+    if !no_update {
+        // Updating requires a saved image
+        let saved_image_path = save_image_to_astra_folder(&image, &image_buf)?;
+        update_wallpaper(saved_image_path)?;
+    }
+    // If no_update == false, we already saved the image as its required to update wallpaper
+    if no_update && !no_save {
+        let _ = save_image_to_astra_folder(&image, &image_buf)?;
+    }
     Ok(())
+}
+
+fn save_image_to_astra_folder(
+    image: &ImageType,
+    image_buf: &AstraImage,
+) -> Result<PathBuf, WallpaperGeneratorError> {
+    let prefix = match image {
+        ImageType::Spotlight => "spotlight",
+        ImageType::Julia => "julia",
+    };
+    save_image(prefix, &image_buf)
 }
