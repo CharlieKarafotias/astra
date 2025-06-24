@@ -56,8 +56,9 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> () {
 }
 
 pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, WindowsError> {
-    let output = Command::new("echo")
-        .arg("%USERPROFILE%\\Desktop")
+    let output = Command::new("powershell")
+        .arg("-Command")
+        .arg("[Environment]::GetFolderPath('Desktop')")
         .output()
         .map_err(|e| WindowsError::DesktopPathError(e.to_string()))?;
     
