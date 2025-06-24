@@ -55,8 +55,14 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> () {
     todo!("Implement for updating wallpaper on windows")
 }
 
-pub(crate) fn path_to_desktop_folder() -> PathBuf {
-    todo!("Implement path to desktop on windows")
+pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, WindowsError> {
+    let output = Command::new("echo")
+        .arg("%USERPROFILE%\\Desktop")
+        .output()
+        .map_err(|e| WindowsError::DesktopPathError(e.to_string()))?;
+    
+    let path = PathBuf::from(&String::from_utf8_lossy(&output.stdout).trim());
+    Ok(path)
 }
 // --- OS specific code ---
 
@@ -99,6 +105,7 @@ fn parse_output(output: &str) -> Result<(u32, u32), WindowsError> {
 #[derive(Debug, PartialEq)]
 pub enum WindowsError {
     DarkModeError(String),
+    DesktopPathError(String),
     ScreenResolutionError(String),
 }
 
@@ -107,6 +114,9 @@ impl std::fmt::Display for WindowsError {
         match self {
             WindowsError::DarkModeError(err) => {
                 write!(f, "Unable to determine dark mode status: {err}")
+            }
+            WindowsError::DesktopPathError(err) => {
+                write!(f, "Unable to determine desktop path: {err}")
             }
             WindowsError::ScreenResolutionError(err) => {
                 write!(f, "Unable to determine resolution of main display: {err}")
