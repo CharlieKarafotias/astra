@@ -52,8 +52,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), WindowsError> {
 }
 
 pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
-    dbg!(path.as_os_str());
-    let out = Command::new("powershell")
+    let _ = Command::new("powershell")
         .arg("-Command")
         .arg("reg")
         .arg("add")
@@ -67,7 +66,8 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
         .arg("/f")
         .output()
         .map_err(|e| WindowsError::UpdateDesktopError(e.to_string()))?;
-    dbg!(&out);
+    // Need to wait for the change to take effect
+    std::thread::sleep(std::time::Duration::from_secs(5));
     // Need to call Update system params to update the wallpaper
     let _ = Command::new("powershell")
         .arg("-Command")
