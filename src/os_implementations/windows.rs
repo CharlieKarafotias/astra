@@ -51,10 +51,39 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), WindowsError> {
     Ok((width, height))
 }
 
-pub(crate) fn update_wallpaper(path: PathBuf) -> () {
-    todo!("Implement for updating wallpaper on windows")
+pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
+    let _ = Command::new("powershell")
+        .arg("-Command")
+        .arg("reg")
+        .arg("add")
+        .arg("\"HKEY_CURRENT_USER\\Control Panel\\Desktop\"")
+        .arg("/v")
+        .arg("Wallpaper")
+        .arg("/t")
+        .arg("REG_SZ")
+        .arg("/d")
+        .arg(path.as_os_str())
+        .arg("/f")
+        .output()
+        .map_err(|e| WindowsError::UpdateDesktopError(e.to_string()))?;
+
+    // Need to call Update system params to update the wallpaper
+    let _ = Command::new("powershell")
+        .arg("-Command")
+        .arg("rundll32.exe,")
+        .arg("user32.dll,")
+        .arg("UpdatePerUserSystemParameters")
+        .output()
+        .map_err(|e| WindowsError::UpdateDesktopError(e.to_string()))?;
+    Ok(())
 }
 
+/// Returns the path to the desktop folder on the local machine.
+///
+/// # Errors
+///
+/// If the `powershell` command cannot be executed for any reason, this function will return an
+/// `Err` containing a `WindowsError` with the `DesktopPathError` variant.
 pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, WindowsError> {
     let output = Command::new("powershell")
         .arg("-Command")
@@ -108,6 +137,7 @@ pub enum WindowsError {
     DarkModeError(String),
     DesktopPathError(String),
     ScreenResolutionError(String),
+    UpdateDesktopError(String),
 }
 
 impl std::fmt::Display for WindowsError {
@@ -121,6 +151,9 @@ impl std::fmt::Display for WindowsError {
             }
             WindowsError::ScreenResolutionError(err) => {
                 write!(f, "Unable to determine resolution of main display: {err}")
+            }
+            WindowsError::UpdateDesktopError(err) => {
+                write!(f, "Unable to update desktop wallpaper: {err}")
             }
         }
     }
