@@ -52,7 +52,8 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), WindowsError> {
 }
 
 pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
-    let _ = Command::new("powershell")
+    dbg!(path.as_os_str());
+    let out = Command::new("powershell")
         .arg("-Command")
         .arg("reg")
         .arg("add")
@@ -66,13 +67,15 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
         .arg("/f")
         .output()
         .map_err(|e| WindowsError::UpdateDesktopError(e.to_string()))?;
-
+    dbg!(&out);
     // Need to call Update system params to update the wallpaper
     let _ = Command::new("powershell")
         .arg("-Command")
         .arg("rundll32.exe,")
         .arg("user32.dll,")
-        .arg("UpdatePerUserSystemParameters")
+        .arg("UpdatePerUserSystemParameters,")
+        .arg("1,")
+        .arg("$false")
         .output()
         .map_err(|e| WindowsError::UpdateDesktopError(e.to_string()))?;
     Ok(())
