@@ -1,6 +1,25 @@
-use std::error::Error;
-use std::path::PathBuf;
-use std::process::Command;
+use std::{
+    error::Error,
+    ffi::OsString,
+    os::{
+        raw::c_void,
+        windows::ffi::{OsStrExt, OsStringExt},
+    },
+    path::PathBuf,
+};
+use windows::{
+    Win32::{
+        System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW},
+        UI::{
+            Shell::{FOLDERID_Desktop, KF_FLAG_DEFAULT, SHGetKnownFolderPath},
+            WindowsAndMessaging::{
+                GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN, SPI_SETDESKWALLPAPER, SPIF_SENDCHANGE,
+                SPIF_UPDATEINIFILE, SystemParametersInfoW,
+            },
+        },
+    },
+    core::{PCWSTR, PWSTR},
+};
 
 // --- OS specific code ---
 /// Checks if the user's OS is currently in dark mode
@@ -11,22 +30,26 @@ use std::process::Command;
 /// OS dark mode state cannot be executed. It can also return an error if the output
 /// cannot be parsed.
 pub(crate) fn is_dark_mode_active() -> Result<bool, WindowsError> {
-    let output = Command::new("powershell")
-        .arg("-Command")
-        .arg("Get-ItemPropertyValue")
-        .arg("-Path")
-        .arg("HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize")
-        .arg("-Name")
-        .arg("SystemUsesLightTheme")
-        .output()
-        .map_err(|e| WindowsError::DarkModeError(e.to_string()))?;
-    let output_str =
-        String::from_utf8(output.stdout).map_err(|e| WindowsError::DarkModeError(e.to_string()))?;
-    let is_light_mode = output_str
-        .trim()
-        .parse::<i8>()
-        .map_err(|e| WindowsError::DarkModeError(e.to_string()))?;
-    Ok(is_light_mode == 0)
+    let mut data: u32 = 0;
+    let mut data_size = std::mem::size_of::<u32>() as u32;
+
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            PCWSTR::from(windows::core::w!(
+                "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"
+            )),
+            PCWSTR::from(windows::core::w!("SystemUsesLightTheme")),
+            RRF_RT_REG_DWORD,
+            None,
+            Some(&mut data as *mut _ as *mut _),
+            Some(&mut data_size),
+        )
+    };
+    status
+        .ok()
+        .map_err(|e| WindowsError::DarkModeError(format!("RegGetValueW failed: {e}")))?;
+    Ok(data == 0) // 0 = dark mode, 1 = light mode
 }
 
 /// Retrieves the resolution of the largest display in pixels.
@@ -37,48 +60,29 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, WindowsError> {
 /// screen resolution cannot be executed. It can also return an error if the output
 /// cannot be parsed.
 pub(crate) fn get_screen_resolution() -> Result<(u32, u32), WindowsError> {
-    let output = Command::new("powershell")
-        .arg("-Command")
-        .arg("Get-CimInstance")
-        .arg("-ClassName")
-        .arg("Win32_VideoController")
-        .arg("|")
-        .arg("Select-Object")
-        .arg("VideoModeDescription")
-        .output()
-        .map_err(|e| WindowsError::ScreenResolutionError(e.to_string()))?;
-    let (width, height) = parse_output(&String::from_utf8_lossy(&output.stdout))?;
-    Ok((width, height))
+    let width = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+    let height = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+    Ok((width as u32, height as u32))
 }
 
 pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
-    let _ = Command::new("powershell")
-        .arg("-Command")
-        .arg("reg")
-        .arg("add")
-        .arg("\"HKEY_CURRENT_USER\\Control Panel\\Desktop\"")
-        .arg("/v")
-        .arg("Wallpaper")
-        .arg("/t")
-        .arg("REG_SZ")
-        .arg("/d")
-        .arg(path.as_os_str())
-        .arg("/f")
-        .output()
-        .map_err(|e| WindowsError::UpdateDesktopError(e.to_string()))?;
-    // Need to wait for the change to take effect
-    std::thread::sleep(std::time::Duration::from_secs(5));
-    // Need to call Update system params to update the wallpaper
-    let _ = Command::new("powershell")
-        .arg("-Command")
-        .arg("rundll32.exe,")
-        .arg("user32.dll,")
-        .arg("UpdatePerUserSystemParameters,")
-        .arg("1,")
-        .arg("$false")
-        .output()
-        .map_err(|e| WindowsError::UpdateDesktopError(e.to_string()))?;
-    Ok(())
+    let widestr: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    let result = unsafe {
+        SystemParametersInfoW(
+            SPI_SETDESKWALLPAPER,
+            0,
+            Some(widestr.as_ptr() as *mut c_void),
+            SPIF_UPDATEINIFILE | SPIF_SENDCHANGE,
+        )
+    };
+
+    result
+        .map_err(|e| WindowsError::UpdateDesktopError(format!("SystemParametersInfoW failed: {e}")))
 }
 
 /// Returns the path to the desktop folder on the local machine.
@@ -88,58 +92,24 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
 /// If the `powershell` command cannot be executed for any reason, this function will return an
 /// `Err` containing a `WindowsError` with the `DesktopPathError` variant.
 pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, WindowsError> {
-    let output = Command::new("powershell")
-        .arg("-Command")
-        .arg("[Environment]::GetFolderPath('Desktop')")
-        .output()
-        .map_err(|e| WindowsError::DesktopPathError(e.to_string()))?;
-    
-    let path = PathBuf::from(&String::from_utf8_lossy(&output.stdout).trim());
-    Ok(path)
-}
-// --- OS specific code ---
-
-// --- Helper functions ---
-/// Parses the output of the `Get-CimInstance` command to extract the resolution of the
-/// largest display.
-///
-/// # Errors
-///
-/// Returns a `WindowsError` with the `ScreenResolutionError` variant if the output
-/// cannot be parsed.
-fn parse_output(output: &str) -> Result<(u32, u32), WindowsError> {
-    let resolutions: Vec<(u32, u32)> = output
-        .lines()
-        .filter_map(|l| {
-            let split: Vec<&str> = l.split('x').collect();
-            if split.len() > 2 {
-                let x = split[0].trim().parse::<u32>().ok()?;
-                let y = split[1].trim().parse::<u32>().ok()?;
-                Some((x, y))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    // Find the highest resolution
-    let max_res = resolutions.iter().max_by_key(|res| res.0 * res.1);
-    if let Some(max_res) = max_res {
-        Ok(*max_res)
-    } else {
-        Err(WindowsError::ScreenResolutionError(
-            "No resolutions returned".to_string(),
-        ))
+    let raw_path: PWSTR;
+    let os_str: OsString;
+    unsafe {
+        raw_path = SHGetKnownFolderPath(&FOLDERID_Desktop, KF_FLAG_DEFAULT, None).map_err(|e| {
+            WindowsError::DesktopPathError(format!("SHGetKnownFolderPath failed: {e}"))
+        })?;
+        os_str = OsString::from_wide(raw_path.as_wide());
     }
+    Ok(PathBuf::from(os_str))
 }
-// --- Helper functions ---
+
+// --- OS specific code ---
 
 // --- Errors ---
 #[derive(Debug, PartialEq)]
 pub enum WindowsError {
     DarkModeError(String),
     DesktopPathError(String),
-    ScreenResolutionError(String),
     UpdateDesktopError(String),
 }
 
@@ -152,9 +122,6 @@ impl std::fmt::Display for WindowsError {
             WindowsError::DesktopPathError(err) => {
                 write!(f, "Unable to determine desktop path: {err}")
             }
-            WindowsError::ScreenResolutionError(err) => {
-                write!(f, "Unable to determine resolution of main display: {err}")
-            }
             WindowsError::UpdateDesktopError(err) => {
                 write!(f, "Unable to update desktop wallpaper: {err}")
             }
@@ -163,43 +130,3 @@ impl std::fmt::Display for WindowsError {
 }
 impl Error for WindowsError {}
 // --- Errors ---
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_output() {
-        let input = "VideoModeDescription\n\
-                    -----------------------\n\
-                    2560 x 1440 x 4294967296 colors\n\
-                    1920 x 1080 x 4294967296 colors\n\
-                    1280 x 720 x 4294967296 colors";
-
-        let result = parse_output(input).unwrap();
-        assert_eq!(result, (2560, 1440));
-    }
-
-    #[test]
-    fn test_parse_output_single_resolution() {
-        let input = "VideoModeDescription\n\
-                    -----------------------\n\
-                    3840 x 2160 x 4294967296 colors";
-
-        let result = parse_output(input).unwrap();
-        assert_eq!(result, (3840, 2160));
-    }
-
-    #[test]
-    fn test_parse_output_invalid_format() {
-        let input = "Invalid format\n\
-                    -----------------------\n\
-                    Not a resolution";
-
-        let result = parse_output(input);
-        assert!(matches!(
-            result,
-            Err(WindowsError::ScreenResolutionError(_))
-        ));
-    }
-}
