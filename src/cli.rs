@@ -37,8 +37,10 @@ pub enum Commands {
 
 #[derive(Clone, ValueEnum, Debug)]
 pub enum ImageType {
-    /// Sets wallpaper to one of Bing's daily Spotlight images
-    Spotlight,
     /// Sets wallpaper to a randomly generated Julia Set
     Julia,
+    /// Sets wallpaper to a solid color
+    Solid,
+    /// Sets wallpaper to one of Bing's daily Spotlight images
+    Spotlight,
 }

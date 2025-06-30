@@ -8,8 +8,8 @@ use os_implementations::update_wallpaper;
 use rand::random_range;
 use std::path::PathBuf;
 use wallpaper_generators::{
-    AstraImage, WallpaperGeneratorError, delete_wallpapers, generate_bing_spotlight,
-    generate_julia_set, save_image,
+    AstraImage, Color, WallpaperGeneratorError, delete_wallpapers, generate_bing_spotlight,
+    generate_julia_set, generate_solid_color, save_image,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -43,8 +43,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Generating image of type: {:?}...", image);
             }
             let image_buf = match image {
-                ImageType::Spotlight => generate_bing_spotlight(verbose),
                 ImageType::Julia => generate_julia_set(verbose),
+                ImageType::Solid => generate_solid_color(Color::Random, verbose),
+                ImageType::Spotlight => generate_bing_spotlight(verbose),
             }?;
             handle_generate_options(image_buf, image.clone(), no_save, no_update, verbose)?;
         }
@@ -52,12 +53,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Default to generate a random image
             // TODO: Ideally, there's preferences for types of images user likes and pref for how often to change wallpaper
             // I think in install directions, should have option to call astra on startup of terminal and auto check if wallpaper needs to be changed based on some preference of how often
+            // TODO: need to refactor so function is fn(generator_options: GeneratorOptions, astra_ctx: AstraContext) -> Result<AstraImage, WallpaperGeneratorError>
             let generators: [(
                 fn(verbose: bool) -> Result<AstraImage, WallpaperGeneratorError>,
                 ImageType,
             ); 2] = [
-                (generate_bing_spotlight, ImageType::Spotlight),
                 (generate_julia_set, ImageType::Julia),
+                // (generate_solid_color, ImageType::Solid),
+                (generate_bing_spotlight, ImageType::Spotlight),
             ];
             let index = random_range(0..generators.len());
             let image_buf = generators[index].0(verbose)?;
@@ -69,14 +72,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// TODO: move to astra_logic module
 fn save_image_to_astra_folder(
     image: &ImageType,
     image_buf: &AstraImage,
     verbose: bool,
 ) -> Result<PathBuf, WallpaperGeneratorError> {
     let prefix = match image {
-        ImageType::Spotlight => "spotlight",
         ImageType::Julia => "julia",
+        ImageType::Solid => "solid",
+        ImageType::Spotlight => "spotlight",
     };
     if verbose {
         println!("Saving image to astra_wallpapers folder...");
@@ -88,6 +93,7 @@ fn save_image_to_astra_folder(
     Ok(path)
 }
 
+// TODO: move to astra_logic module
 fn handle_generate_options(
     image_buf: AstraImage,
     image: ImageType,
