@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use super::Color;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -25,6 +26,7 @@ pub enum Commands {
     /// Generates a new wallpaper
     Generate {
         /// The type of image to generate
+        #[command(subcommand)]
         image: ImageType,
         #[arg(long)]
         /// Skip saving the image to the "astra_wallpapers" folder.
@@ -35,12 +37,62 @@ pub enum Commands {
     },
 }
 
-#[derive(Clone, ValueEnum, Debug)]
+#[derive(Clone, Debug, Subcommand)]
 pub enum ImageType {
     /// Sets wallpaper to a randomly generated Julia Set
     Julia,
     /// Sets wallpaper to a solid color
-    Solid,
+    Solid {
+        #[command(subcommand)]
+        mode: SolidMode,
+    },
     /// Sets wallpaper to one of Bing's daily Spotlight images
     Spotlight,
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub enum SolidMode {
+    /// Use a pre-defined color
+    Color {
+        // TODO: implement the list color command
+        /// Color name (use --list-colors to get a list of available colors)
+        #[arg(value_enum)]
+        name: Color,
+        // TODO: add list colors option here. either able to send a color or pass the list option to CLI
+    },
+    /// Use a random color
+    Random,
+    /// Use a custom color by RGB value
+    Rgb {
+        /// Red component (0-255)
+        r: u8,
+        /// Green component (0-255)
+        g: u8,
+        /// Blue component (0-255)
+        b: u8,
+    },
+}
+
+pub enum Mode {
+    Solid(SolidMode),
+}
+
+pub struct Config {
+    verbose: bool,
+}
+
+impl Config {
+    pub fn new(verbose: bool) -> Self {
+        Self { verbose }
+    }
+
+    pub fn verbose(&self) -> bool {
+        self.verbose
+    }
+
+    pub fn print_if_verbose(&self, message: &str) {
+        if self.verbose {
+            println!("{}", message);
+        }
+    }
 }

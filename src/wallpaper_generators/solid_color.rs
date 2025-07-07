@@ -1,31 +1,115 @@
+use super::super::cli::{Config, Mode, SolidMode};
 use super::super::os_implementations::get_screen_resolution;
 use super::utils::{AstraImage, WallpaperGeneratorError};
 use image::{ImageBuffer, Rgb};
 
+#[derive(Copy, Clone, Debug)]
 pub enum Color {
-    Random,
-    Solid { r: u8, g: u8, b: u8 },
-    Named { name: &'static str },
+    White,
+    Black,
+    LightGray,
+    DarkGray,
+    Silver,
+    SlateGray,
+    NavyBlue,
+    SkyBlue,
+    SteelBlue,
+    Teal,
+    ForestGreen,
+    Olive,
+    Lime,
+    Maroon,
+    Crimson,
+    DeepPurple,
+    Indigo,
+    Orchid,
+    Coral,
+    Beige,
 }
-pub fn generate_solid_color(
-    color: Color,
-    verbose: bool,
-) -> Result<AstraImage, WallpaperGeneratorError> {
-    if verbose {
-        println!("Generating solid color...");
+
+impl std::str::FromStr for Color {
+    type Err = WallpaperGeneratorError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "White" => Ok(Color::White),
+            "Black" => Ok(Color::Black),
+            "LightGray" => Ok(Color::LightGray),
+            "DarkGray" => Ok(Color::DarkGray),
+            "Silver" => Ok(Color::Silver),
+            "SlateGray" => Ok(Color::SlateGray),
+            "NavyBlue" => Ok(Color::NavyBlue),
+            "SkyBlue" => Ok(Color::SkyBlue),
+            "SteelBlue" => Ok(Color::SteelBlue),
+            "Teal" => Ok(Color::Teal),
+            "ForestGreen" => Ok(Color::ForestGreen),
+            "Olive" => Ok(Color::Olive),
+            "Lime" => Ok(Color::Lime),
+            "Maroon" => Ok(Color::Maroon),
+            "Crimson" => Ok(Color::Crimson),
+            "DeepPurple" => Ok(Color::DeepPurple),
+            "Indigo" => Ok(Color::Indigo),
+            "Orchid" => Ok(Color::Orchid),
+            "Coral" => Ok(Color::Coral),
+            "Beige" => Ok(Color::Beige),
+            _ => Err(WallpaperGeneratorError::InvalidColorName(s.to_string())),
+        }
     }
+}
+impl Color {
+    fn rgb(&self) -> (u8, u8, u8) {
+        match self {
+            Color::White => (255, 255, 255),
+            Color::Black => (0, 0, 0),
+            Color::LightGray => (211, 211, 211),
+            Color::DarkGray => (64, 64, 64),
+            Color::Silver => (192, 192, 192),
+            Color::SlateGray => (112, 128, 144),
+            Color::NavyBlue => (0, 0, 128),
+            Color::SkyBlue => (135, 206, 235),
+            Color::SteelBlue => (70, 130, 180),
+            Color::Teal => (0, 128, 128),
+            Color::ForestGreen => (34, 139, 34),
+            Color::Olive => (128, 128, 0),
+            Color::Lime => (0, 255, 0),
+            Color::Maroon => (128, 0, 0),
+            Color::Crimson => (220, 20, 60),
+            Color::DeepPurple => (75, 0, 130),
+            Color::Indigo => (75, 0, 130),
+            Color::Orchid => (218, 112, 214),
+            Color::Coral => (255, 127, 80),
+            Color::Beige => (245, 245, 220),
+        }
+    }
+}
+
+pub fn generate_solid_color(
+    config: &Config,
+    mode: Option<Mode>,
+) -> Result<AstraImage, WallpaperGeneratorError> {
+    config.print_if_verbose("Generating solid color...");
+
     let (width, height) =
         get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
-    if verbose {
-        println!("Detected screen resolution: {}x{}", width, height);
-    }
+    config.print_if_verbose(format!("Detected screen resolution: {}x{}", width, height).as_str());
 
-    if verbose {
-        println!("Generating image...");
-    }
+    config.print_if_verbose("Generating image...");
 
-    let imgbuf = match color {
-        Color::Random => ImageBuffer::from_pixel(
+    let mode = mode.ok_or(WallpaperGeneratorError::NoModeProvided(
+        "Solid color generator requires a SolidMode".to_string(),
+    ))?;
+    // Expect a SolidMode, error is other mode provided
+    let solid_mode: SolidMode = match mode {
+        Mode::Solid(mode) => mode,
+        // Leave this in as in the future more modes can be added
+        _ => {
+            return Err(WallpaperGeneratorError::InvalidMode(
+                "SolidMode".to_string(),
+            ));
+        }
+    };
+    let imgbuf = match solid_mode {
+        SolidMode::Random => ImageBuffer::from_pixel(
             width,
             height,
             Rgb([
@@ -34,48 +118,14 @@ pub fn generate_solid_color(
                 rand::random::<u8>(),
             ]),
         ),
-        Color::Solid { r, g, b } => ImageBuffer::from_pixel(width, height, Rgb([r, g, b])),
-        Color::Named { name } => {
-            let color = COLORS
-                .get(name)
-                .ok_or(WallpaperGeneratorError::InvalidColorName(name.to_string()))?;
-
-            ImageBuffer::from_pixel(width, height, Rgb([color.0, color.1, color.2]))
+        SolidMode::Rgb { r, g, b } => ImageBuffer::from_pixel(width, height, Rgb([r, g, b])),
+        SolidMode::Color { name } => {
+            let (r, g, b) = name.rgb();
+            ImageBuffer::from_pixel(width, height, Rgb([r, g, b]))
         }
     };
 
-    if verbose {
-        println!("Image generated!");
-    }
+    config.print_if_verbose("Image generated!");
 
     Ok(imgbuf)
-}
-
-use phf::phf_map;
-
-static COLORS: phf::Map<&'static str, (u8, u8, u8)> = phf_map! {
-    "White" => (255, 255, 255),
-    "Black" => (0, 0, 0),
-    "LightGray" => (211, 211, 211),
-    "DarkGray" => (64, 64, 64),
-    "Silver" => (192, 192, 192),
-    "SlateGray" => (112, 128, 144),
-    "NavyBlue" => (0, 0, 128),
-    "SkyBlue" => (135, 206, 235),
-    "SteelBlue" => (70, 130, 180),
-    "Teal" => (0, 128, 128),
-    "ForestGreen" => (34, 139, 34),
-    "Olive" => (128, 128, 0),
-    "Lime" => (0, 255, 0),
-    "Maroon" => (128, 0, 0),
-    "Crimson" => (220, 20, 60),
-    "DeepPurple" => (75, 0, 130),
-    "Indigo" => (75, 0, 130),
-    "Orchid" => (218, 112, 214),
-    "Coral" => (255, 127, 80),
-    "Beige" => (245, 245, 220),
-};
-
-pub fn color_options_by_name() -> Vec<&'static str> {
-    COLORS.keys().copied().collect()
 }

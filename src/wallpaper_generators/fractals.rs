@@ -1,3 +1,4 @@
+use super::super::cli::{Config, Mode};
 use super::super::os_implementations::{get_screen_resolution, is_dark_mode_active};
 use super::utils::{AstraImage, Operator, WallpaperGeneratorError, create_color_map, scale_image};
 use crate::wallpaper_generators::color_themes::ThemeSelector;
@@ -6,27 +7,22 @@ use num_complex::Complex;
 use rand::random_range;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-pub fn generate_julia_set(verbose: bool) -> Result<AstraImage, WallpaperGeneratorError> {
-    if verbose {
-        println!("Generating julia set...");
-    }
+pub fn generate_julia_set(
+    config: &Config,
+    _mode: Option<Mode>,
+) -> Result<AstraImage, WallpaperGeneratorError> {
+    config.print_if_verbose("Generating julia set...");
     let (width, height) =
         get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
-    if verbose {
-        println!("Detected screen resolution: {}x{}", width, height);
-    }
+    config.print_if_verbose(format!("Detected screen resolution: {}x{}", width, height).as_str());
 
     let dark_mode =
         is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
-    if verbose {
-        println!("Is dark mode active: {}", dark_mode);
-    }
+    config.print_if_verbose(format!("Is dark mode active: {}", dark_mode).as_str());
 
     let theme = ThemeSelector::random();
     let selected_theme = theme.selected();
-    if verbose {
-        println!("{selected_theme}");
-    }
+    config.print_if_verbose(format!("Selected theme: {selected_theme}",).as_str());
 
     let color_map = create_color_map(
         Operator::Gradient,
@@ -50,25 +46,19 @@ pub fn generate_julia_set(verbose: bool) -> Result<AstraImage, WallpaperGenerato
         Complex::new(0.0, 0.8),
     ];
     let selected_julia_set = julia_sets[random_range(0..julia_sets.len())];
-    if verbose {
-        println!("Selected julia set: {}", selected_julia_set);
-    }
+    config.print_if_verbose(format!("Selected julia set: {}", selected_julia_set).as_str());
 
     // Find hotspots and randomly select one
     let points_weights = sample_julia_set(selected_julia_set, width, height);
     let complex_hotspot = points_weights[random_range(0..points_weights.len())].0;
-    if verbose {
-        println!("Selected hotspot: {}", complex_hotspot);
-    }
+    config.print_if_verbose(format!("Selected hotspot: {}", complex_hotspot).as_str());
 
     let focus_pt = (complex_hotspot.re, complex_hotspot.im);
     let (scale_x, scale_y, start_x, start_y) =
         scale_image(3.0, 3.5, focus_pt, random_range(1.0..10.0));
     let mut imgbuf = ImageBuffer::new(width, height);
+    config.print_if_verbose("Generating image...");
 
-    if verbose {
-        println!("Generating image...");
-    }
     // Generate full julia set
     imgbuf.par_enumerate_pixels_mut().for_each(|(x, y, pixel)| {
         let cx = x as f64 * (scale_x / width as f64) + start_x;
@@ -85,9 +75,7 @@ pub fn generate_julia_set(verbose: bool) -> Result<AstraImage, WallpaperGenerato
         *pixel = Rgb(color_map[i]);
     });
 
-    if verbose {
-        println!("Image generated!");
-    }
+    config.print_if_verbose("Image generated!");
 
     Ok(imgbuf)
 }
