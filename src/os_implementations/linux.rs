@@ -1,4 +1,4 @@
-use std::{fmt::Display, path::PathBuf, process::Command};
+use std::{error::Error, fmt::Display, path::PathBuf, process::Command};
 
 // --- OS specific code ---
 /// Checks if the user's OS is currently in dark mode
@@ -135,8 +135,11 @@ impl Display for LinuxOSError {
         }
     }
 }
+
+impl Error for LinuxOSErrorr {}
 // --- Errors ---
 
+// --- Tests ---
 #[cfg(test)]
 mod tests {
     use super::*;
