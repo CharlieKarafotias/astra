@@ -15,8 +15,19 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
     let output_str = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
     Ok(output_str.contains("prefer-dark"))
 }
-pub(crate) fn get_screen_resolution() -> (u32, u32) {
-    todo!("Implement for screen resolution on linux")
+pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
+    let output = Command::new("xrandr")
+        .arg("--current")
+        .arg("|")
+        .arg("grep")
+        .arg("oP")
+        .arg("'current \\K[0-9]+ x [0-9]+'")
+        .output()
+        .map_err(|e| LinuxOSError::ResolutionNotFound(e.to_string()))?;
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .split_once('x')
+        .map(|(w, h)| (w.parse().map_err(|e| LinuxOSError::ParseError(e.to_string()))?, h.parse().map_err(|e| LinuxOSError::ParseError(e.to_string()))?))
 }
 
 pub(crate) fn update_wallpaper(path: &str) -> () {
@@ -37,7 +48,8 @@ pub enum LinuxOSError {
     DarkModeError(String),
     HomeEnvVarNotFound,
     MainDisplayNotFound,
-    ResolutionNotFound,
+    ParseError(String),
+    ResolutionNotFound(String),
 }
 
 impl Display for LinuxOSError {
@@ -50,8 +62,11 @@ impl Display for LinuxOSError {
                 write!(f, "Unable to find $HOME environment variable")
             }
             LinuxOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
-            LinuxOSError::ResolutionNotFound => {
-                write!(f, "Unable to determine resolution of main display")
+            LinuxOSError::ParseError(err_msg) => {
+                write!(f, "Unable to parse output: {err_msg}")
+            }
+            LinuxOSError::ResolutionNotFound(err_msg) => {
+                write!(f, "Unable to determine resolution of main display: {err_msg}")
             }
         }
     }
