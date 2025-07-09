@@ -62,12 +62,42 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
     ))
 }
 
+/// Sets the wallpaper to the given path. This relies on the `gsettings` command to
+/// set the wallpaper.
+///
+/// This function has been tested on:
+///   - Ubuntu 25.04 with Gnome Desktop
+///
+/// # Errors
+///
+/// Returns a `LinuxOSError` with the `CommandError` variant if the `gsettings` command
+/// cannot be executed.
 pub(crate) fn update_wallpaper(path: &str) -> () {
-    todo!("Implement for updating wallpaper on linux")
+    // TODO: add support for other linux distros (non gnome based)
+    let output = Command::new("gsettings")
+        .arg("set")
+        .arg("org.gnome.desktop.background")
+        .arg("picture-uri")
+        .arg(format!("\"file:///{path}\""))
+        .output()
+        .map_err(|e| LinuxOSError::CommandError(e.to_string()))?;
+    Ok(())
 }
 
+/// Returns the path to the user's desktop folder. This relies on the `xdg-user-dir` command to
+/// determine the path.
+///
+/// # Errors
+///
+/// Returns a `LinuxOSError` with the `CommandError` variant if the `xdg-user-dir` command
+/// cannot be executed.
 pub(crate) fn path_to_desktop_folder() -> PathBuf {
-    todo!("Implement path to desktop on linux")
+    let output = Command::new("xdg-user-dir")
+        .arg("DESKTOP")
+        .output()
+        .map_err(|e| LinuxOSError::CommandError(e.to_string()))?;
+    let desktop_path = String::from_utf8_lossy(&output.stdout);
+    PathBuf::from(desktop_path.trim())
 }
 // --- OS specific code ---
 
@@ -77,9 +107,8 @@ pub(crate) fn path_to_desktop_folder() -> PathBuf {
 // --- Errors ---
 #[derive(Debug, PartialEq)]
 pub enum LinuxOSError {
+    CommandError(String),
     DarkModeError(String),
-    HomeEnvVarNotFound,
-    MainDisplayNotFound,
     ParseError(String),
     ResolutionNotFound(String),
 }
@@ -87,13 +116,12 @@ pub enum LinuxOSError {
 impl Display for LinuxOSError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            LinuxOSError::CommandError(err_msg) => {
+                write!(f, "Unable to execute command: {err_msg}")
+            }
             LinuxOSError::DarkModeError(err_msg) => {
                 write!(f, "Unable to determine dark mode status: {err_msg}")
             }
-            LinuxOSError::HomeEnvVarNotFound => {
-                write!(f, "Unable to find $HOME environment variable")
-            }
-            LinuxOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
             LinuxOSError::ParseError(err_msg) => {
                 write!(f, "Unable to parse output: {err_msg}")
             }
