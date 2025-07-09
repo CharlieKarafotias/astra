@@ -5,18 +5,15 @@ use std::{fmt::Display, path::PathBuf, process::Command};
 /// Tested on:
 ///   - Ubuntu 25.04 with Gnome Desktop
 pub(crate) fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
+    // TODO: add support for other linux distros (non gnome based)
     let output = Command::new("gsettings")
         .arg("get")
         .arg("org.gnome.desktop.interface")
         .arg("color-scheme")
         .output()
         .map_err(|e| LinuxOSError::DarkModeError(e.to_string()))?;
-    let output_str = String::from_utf8_lossy(&output.stdout);
-    let dark_mode_enabled = match output_str.trim().to_lowercase().as_str() {
-        "'prefer-dark'" => true,
-        _ => false,
-    };
-    Ok(dark_mode_enabled)
+    let output_str = String::from_utf8_lossy(&output.stdout).trim().to_lowercase();
+    Ok(output_str.contains("prefer-dark"))
 }
 pub(crate) fn get_screen_resolution() -> (u32, u32) {
     todo!("Implement for screen resolution on linux")
