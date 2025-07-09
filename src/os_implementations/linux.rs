@@ -17,6 +17,15 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
         .to_lowercase();
     Ok(output_str.contains("prefer-dark"))
 }
+
+/// Gets the resolution of the primary display. This relies on the `xrandr` command to
+/// determine the resolution.
+///
+/// # Errors
+///
+/// Returns a `LinuxOSError` with the `ResolutionNotFound` variant if the command to determine
+/// screen resolution cannot be executed. It can also return an error if the output
+/// cannot be parsed.
 pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
     // First, get the primary display name
     let output = Command::new("xrandr")
