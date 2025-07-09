@@ -27,7 +27,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
     String::from_utf8_lossy(&output.stdout)
         .trim()
         .split_once('x')
-        .map(|(w, h)| (w.parse().map_err(|e| LinuxOSError::ParseError(e.to_string()))?, h.parse().map_err(|e| LinuxOSError::ParseError(e.to_string()))?))
+        .map(|(w, h)| (w.parse::<u32>().map_err(|e| LinuxOSError::ParseError(e.to_string()))?, h.parse::<u32>().map_err(|e| LinuxOSError::ParseError(e.to_string()))?))
 }
 
 pub(crate) fn update_wallpaper(path: &str) -> () {
