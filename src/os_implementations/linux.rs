@@ -79,7 +79,7 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
         .arg("set")
         .arg("org.gnome.desktop.background")
         .arg("picture-uri")
-        .arg(format!("\"file:///{path}\""))
+        .arg(format!("\"file:///{}\"", path.display()))
         .output()
         .map_err(|e| LinuxOSError::CommandError(e.to_string()))?;
     Ok(())
