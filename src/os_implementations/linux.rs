@@ -1,6 +1,7 @@
 use std::{fmt::Display, path::PathBuf, process::Command};
+
 // --- OS specific code ---
-/// CHecks if the user's OS is currently in dark mode
+/// Checks if the user's OS is currently in dark mode
 ///
 /// Tested on:
 ///   - Ubuntu 25.04 with Gnome Desktop
@@ -72,7 +73,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
 ///
 /// Returns a `LinuxOSError` with the `CommandError` variant if the `gsettings` command
 /// cannot be executed.
-pub(crate) fn update_wallpaper(path: &str) -> () {
+pub(crate) fn update_wallpaper(path: &str) -> Result<(), LinuxOSError> {
     // TODO: add support for other linux distros (non gnome based)
     let output = Command::new("gsettings")
         .arg("set")
@@ -91,7 +92,7 @@ pub(crate) fn update_wallpaper(path: &str) -> () {
 ///
 /// Returns a `LinuxOSError` with the `CommandError` variant if the `xdg-user-dir` command
 /// cannot be executed.
-pub(crate) fn path_to_desktop_folder() -> PathBuf {
+pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, LinuxOSError> {
     let output = Command::new("xdg-user-dir")
         .arg("DESKTOP")
         .output()
