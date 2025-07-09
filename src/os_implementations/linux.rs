@@ -136,7 +136,7 @@ impl Display for LinuxOSError {
     }
 }
 
-impl Error for LinuxOSErrorr {}
+impl Error for LinuxOSError {}
 // --- Errors ---
 
 // --- Tests ---
