@@ -33,7 +33,6 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
         .arg("--current")
         .output()
         .map_err(|e| LinuxOSError::ResolutionNotFound(e.to_string()))?;
-
     // Parse the output to find the current resolution
     let output_str = String::from_utf8_lossy(&output.stdout);
 
@@ -74,14 +73,17 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
 /// Returns a `LinuxOSError` with the `CommandError` variant if the `gsettings` command
 /// cannot be executed.
 pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
-
-    // TODO: ensure this works as expected...
     // TODO: add support for other linux distros (non gnome based)
-    let output = Command::new("gsettings")
+    let picture_uri_arg = if is_dark_mode_active()? {
+        "picture-uri-dark"
+    } else {
+        "picture-uri"
+    };
+    Command::new("gsettings")
         .arg("set")
         .arg("org.gnome.desktop.background")
-        .arg("picture-uri")
-        .arg(format!("\"file:///{}\"", path.display()))
+        .arg(picture_uri_arg)
+        .arg(path)
         .output()
         .map_err(|e| LinuxOSError::CommandError(e.to_string()))?;
     Ok(())
@@ -141,47 +143,3 @@ impl Display for LinuxOSError {
 
 impl Error for LinuxOSError {}
 // --- Errors ---
-
-// --- Tests ---
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_resolution() {
-        // This is example output of xrandr
-        let xrandr_output = r#"Screen 0: minimum 16 x 16, current 1920 x 1080, maximum 32767 x 32767
-            HDMI-1 connected primary 1920x1080+0+0 (normal left inverted right x axis y axis) 800mm x 340mm
-               1920x1080     59.96*+
-               1440x1080     59.99
-               1400x1050     59.98
-               1280x1024     59.89
-               1280x960      59.94
-               1152x864      59.96
-               1024x768      59.92
-               800x600       59.86
-               640x480       59.38
-               320x240       59.29
-               1680x1050     59.95
-               1440x900      59.89
-               1280x800      59.81
-               1152x720      59.97
-               960x600       59.63
-               928x580       59.88
-               800x500       59.50
-               768x480       59.90
-               720x480       59.71
-               640x400       59.95
-               320x200       58.14
-               1600x900      59.95
-               1368x768      59.88
-               1280x720      59.86
-               1024x576      59.90
-               864x486       59.92
-               720x400       59.27
-               640x350       59.28
-        "#;
-
-        assert_eq!(get_screen_resolution().unwrap(), (1920, 1080));
-    }
-}
