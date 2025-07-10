@@ -27,9 +27,9 @@ cd astra
 # Build the project
 cargo build --release
 
-# Move the Astra binary to preferred location (e.g., /opt) 
+# Move the Astra binary to preferred location (e.g., /opt, /usr/local/bin) 
 # Note: You may need to run this command with sudo
-cp target/release/astra /opt
+sudo cp target/release/astra /usr/local/bin
 
 # Test astra (you may need to restart your terminal)
 astra -V
