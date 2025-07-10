@@ -97,7 +97,6 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
 /// Returns a `LinuxOSError` with the `CommandError` variant if the `xdg-user-dir` command
 /// cannot be executed.
 pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, LinuxOSError> {
-    // TODO: ensure this works as expected...
     let output = Command::new("xdg-user-dir")
         .arg("DESKTOP")
         .output()
