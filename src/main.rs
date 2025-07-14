@@ -54,7 +54,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Default to generate a random image
             // TODO: Ideally, there's preferences for types of images user likes and pref for how often to change wallpaper
             // I think in install directions, should have option to call astra on startup of terminal and auto check if wallpaper needs to be changed based on some preference of how often
-            // TODO: need to refactor so function is fn(generator_options: GeneratorOptions, astra_ctx: AstraContext) -> Result<AstraImage, WallpaperGeneratorError>
             let generators: [(
                 fn(
                     config: &Config,
