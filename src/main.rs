@@ -1,10 +1,12 @@
 mod cli;
 mod os_implementations;
 mod wallpaper_generators;
+mod updater;
 
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Commands, Config, ImageType, Mode, SolidMode};
+use updater::update;
 use os_implementations::update_wallpaper;
 use rand::random_range;
 use std::path::PathBuf;
@@ -52,7 +54,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             handle_generate_options(&config, image_buf, image.clone(), no_save, no_update)?;
         }
         Some(Commands::GenerateCompletions { shell }) => {
+            config.print_if_verbose("Generating shell completions...");
             generate(shell, &mut Cli::command(), "astra", &mut std::io::stdout());
+        }
+        Some(Commands::Update) => {
+            update(&config)?;
         }
         None => {
             // Default to generate a random image

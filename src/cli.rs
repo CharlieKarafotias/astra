@@ -41,7 +41,9 @@ pub enum Commands {
         /// The shell to generate completion scripts for
         #[arg(value_enum)]
         shell: Shell,
-    }
+    },
+    /// Update Astra to the latest version
+    Update,
 }
 
 #[derive(Clone, Debug, Subcommand)]
