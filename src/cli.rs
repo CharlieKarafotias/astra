@@ -54,11 +54,9 @@ pub enum ImageType {
 pub enum SolidMode {
     /// Use a pre-defined color
     Color {
-        // TODO: implement the list color command
-        /// Color name (use --list-colors to get a list of available colors)
+        /// Color name (see all options with `--help`)
         #[arg(value_enum)]
         name: Color,
-        // TODO: add list colors option here. either able to send a color or pass the list option to CLI
     },
     /// Use a random color
     Random,

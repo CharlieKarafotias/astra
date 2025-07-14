@@ -1,9 +1,10 @@
 use super::super::cli::{Config, Mode, SolidMode};
 use super::super::os_implementations::get_screen_resolution;
 use super::utils::{AstraImage, WallpaperGeneratorError};
+use clap::ValueEnum;
 use image::{ImageBuffer, Rgb};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, ValueEnum)]
 pub enum Color {
     White,
     Black,
@@ -27,35 +28,6 @@ pub enum Color {
     Beige,
 }
 
-impl std::str::FromStr for Color {
-    type Err = WallpaperGeneratorError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "White" => Ok(Color::White),
-            "Black" => Ok(Color::Black),
-            "LightGray" => Ok(Color::LightGray),
-            "DarkGray" => Ok(Color::DarkGray),
-            "Silver" => Ok(Color::Silver),
-            "SlateGray" => Ok(Color::SlateGray),
-            "NavyBlue" => Ok(Color::NavyBlue),
-            "SkyBlue" => Ok(Color::SkyBlue),
-            "SteelBlue" => Ok(Color::SteelBlue),
-            "Teal" => Ok(Color::Teal),
-            "ForestGreen" => Ok(Color::ForestGreen),
-            "Olive" => Ok(Color::Olive),
-            "Lime" => Ok(Color::Lime),
-            "Maroon" => Ok(Color::Maroon),
-            "Crimson" => Ok(Color::Crimson),
-            "DeepPurple" => Ok(Color::DeepPurple),
-            "Indigo" => Ok(Color::Indigo),
-            "Orchid" => Ok(Color::Orchid),
-            "Coral" => Ok(Color::Coral),
-            "Beige" => Ok(Color::Beige),
-            _ => Err(WallpaperGeneratorError::InvalidColorName(s.to_string())),
-        }
-    }
-}
 impl Color {
     fn rgb(&self) -> (u8, u8, u8) {
         match self {
