@@ -29,7 +29,7 @@ use serde::Deserialize;
 /// * `ParseError`: The JSON response from the API failed to parse.
 pub fn generate_bing_spotlight(
     config: &Config,
-    mode: Option<Mode>,
+    _mode: Option<Mode>,
 ) -> Result<AstraImage, WallpaperGeneratorError> {
     config.print_if_verbose("Generating Bing Spotlight...");
     config.print_if_verbose("Fetching today's Bing Spotlight wallpaper...");

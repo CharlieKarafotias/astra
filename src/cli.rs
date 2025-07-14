@@ -86,10 +86,6 @@ impl Config {
         Self { verbose }
     }
 
-    pub fn verbose(&self) -> bool {
-        self.verbose
-    }
-
     pub fn print_if_verbose(&self, message: &str) {
         if self.verbose {
             println!("{}", message);

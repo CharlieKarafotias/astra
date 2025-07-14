@@ -6,7 +6,6 @@ use clap::Parser;
 use cli::{Cli, Commands, Config, ImageType, Mode, SolidMode};
 use os_implementations::update_wallpaper;
 use rand::random_range;
-use std::fmt::format;
 use std::path::PathBuf;
 use wallpaper_generators::{
     AstraImage, Color, WallpaperGeneratorError, delete_wallpapers, generate_bing_spotlight,
