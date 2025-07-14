@@ -1,5 +1,6 @@
 use super::Color;
 use clap::{Parser, Subcommand};
+use clap_complete::Shell;
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -35,6 +36,12 @@ pub enum Commands {
         /// Skip updating current desktop wallpaper to generated image
         no_update: bool,
     },
+    /// Generate shell completion scripts
+    GenerateCompletions {
+        /// The shell to generate completion scripts for
+        #[arg(value_enum)]
+        shell: Shell,
+    }
 }
 
 #[derive(Clone, Debug, Subcommand)]

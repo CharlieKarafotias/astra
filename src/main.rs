@@ -2,7 +2,8 @@ mod cli;
 mod os_implementations;
 mod wallpaper_generators;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::generate;
 use cli::{Cli, Commands, Config, ImageType, Mode, SolidMode};
 use os_implementations::update_wallpaper;
 use rand::random_range;
@@ -49,6 +50,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ImageType::Spotlight => generate_bing_spotlight(&config, None),
             }?;
             handle_generate_options(&config, image_buf, image.clone(), no_save, no_update)?;
+        }
+        Some(Commands::GenerateCompletions { shell }) => {
+            generate(shell, &mut Cli::command(), "astra", &mut std::io::stdout());
         }
         None => {
             // Default to generate a random image
