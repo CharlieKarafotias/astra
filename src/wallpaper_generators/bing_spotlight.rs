@@ -1,3 +1,4 @@
+use super::super::cli::{Config, Mode};
 use super::utils::{AstraImage, WallpaperGeneratorError};
 use serde::Deserialize;
 
@@ -26,10 +27,13 @@ use serde::Deserialize;
 ///   failed to parse.
 /// * `NetworkError`: The API request failed.
 /// * `ParseError`: The JSON response from the API failed to parse.
-pub fn generate_bing_spotlight(verbose: bool) -> Result<AstraImage, WallpaperGeneratorError> {
-    if verbose {
-        println!("Fetching today's Bing Spotlight wallpaper...");
-    }
+pub fn generate_bing_spotlight(
+    config: &Config,
+    _mode: Option<Mode>,
+) -> Result<AstraImage, WallpaperGeneratorError> {
+    config.print_if_verbose("Generating Bing Spotlight...");
+    config.print_if_verbose("Fetching today's Bing Spotlight wallpaper...");
+
     // Credit to Spotlight Downloader project for API reference
     // https://github.com/ORelio/Spotlight-Downloader/blob/master/SpotlightAPI.md
     let res = reqwest::blocking::get("https://fd.api.iris.microsoft.com/v4/api/selection?&placement=88000820&bcnt=1&country=US&locale=en-US&fmt=json")
@@ -42,25 +46,20 @@ pub fn generate_bing_spotlight(verbose: bool) -> Result<AstraImage, WallpaperGen
             "No images found in response".to_string(),
         ));
     }
-    if verbose {
-        println!("Received response with image URL");
-    }
+    config.print_if_verbose("Received response with image URL");
 
     let image_info: ImageInfo = serde_json::from_str(&res.batchrsp.items[0].item)
         .map_err(|e| WallpaperGeneratorError::ParseError(e.to_string()))?;
     let image_url = image_info.ad.landscape_image.asset;
 
-    if verbose {
-        println!("Downloading image...");
-    }
+    config.print_if_verbose("Downloading image...");
+
     let image = reqwest::blocking::get(image_url)
         .map_err(|e| WallpaperGeneratorError::NetworkError(e.to_string()))?
         .bytes()
         .map_err(|e| WallpaperGeneratorError::NetworkError(e.to_string()))?
         .to_vec();
-    if verbose {
-        println!("Image downloaded successfully");
-    }
+    config.print_if_verbose("Image downloaded successfully");
 
     let loaded_image = image::load_from_memory(&image)
         .map_err(|e| WallpaperGeneratorError::ImageGenerationError(e.to_string()))?;
