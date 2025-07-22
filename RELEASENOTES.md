@@ -1,5 +1,10 @@
 # Astra Release Notes
 
+## v1.0.1
+
+### Bug Fix
+- Error with tagging on release causing homebrew to pull old version
+
 ## v1.0.0
 
 ### New Features
