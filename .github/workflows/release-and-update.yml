@@ -19,12 +19,16 @@ jobs:
                 version=$(grep '^version =' Cargo.toml | awk -F= '{gsub(/^[[:space:]]+/, "", $2); print $2}' | tr -d \") 
                 echo "VERSION=$version" >> $GITHUB_ENV
                 echo "Tagging version: v$VERSION"
-            - name: Create Git tag
+            - name: Create Git tag if it doesn't exist
               run: |
-                git config user.name "GitHub Actions"
-                git config user.email "actions@github.com"
-                git tag "v$VERSION"
-                git push origin "v$VERSION"
+                if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+                    echo "Tag v$VERSION already exists. Skipping."
+                else
+                    git config user.name "GitHub Actions"
+                    git config user.email "actions@github.com"
+                    git tag "v$VERSION"
+                    git push origin "v$VERSION"
+                fi
             - name: Create GitHub release
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
