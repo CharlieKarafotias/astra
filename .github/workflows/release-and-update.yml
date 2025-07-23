@@ -33,7 +33,11 @@ jobs:
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
-                gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "Release v$VERSION" --generate-notes
+                if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+                    echo "Release v$VERSION already exists. Skipping."
+                else
+                    gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "Release v$VERSION" --generate-notes
+                fi
             - name: Trigger Homebrew formula update
               run: |
                 gh api \
