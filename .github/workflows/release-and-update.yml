@@ -21,7 +21,7 @@ jobs:
                 echo "Tagging version: v$VERSION"
             - name: Create Git tag if it doesn't exist
               run: |
-                if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+                if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q "refs/tags/v$VERSION"; then
                     echo "Tag v$VERSION already exists. Skipping."
                 else
                     git config user.name "GitHub Actions"
