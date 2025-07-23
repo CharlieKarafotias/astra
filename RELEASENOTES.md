@@ -1,5 +1,10 @@
 # Astra Release Notes
 
+## v1.0.2
+
+### Improvements
+- Automated releases
+
 ## v1.0.1
 
 ### Bug Fix
