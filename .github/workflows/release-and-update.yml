@@ -39,12 +39,14 @@ jobs:
                     gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --title "Release v$VERSION" --generate-notes
                 fi
             - name: Trigger Homebrew formula update
+              env:
+                GH_TOKEN: ${{ secrets.HOMEBREW_TOKEN }}
+                VERSION: ${{ env.VERSION }}
               run: |
                 gh api \
-                  --method POST \
-                  -H "Accept: application/vnd.github+json" \
-                  -H "X-GitHub-Api-Version: 2022-11-28" \
-                  -H "Authorization: token ${{ secrets.HOMEBREW_TOKEN }}" \
-                  '/repos/charliekarafotias/homebrew-tools/actions/workflows/update-astra-formula.yml/dispatches' \
-                  -f 'ref=main' \
-                  -f 'inputs[version]=$VERSION'  
+                --method POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                '/repos/charliekarafotias/homebrew-tools/actions/workflows/update-astra-formula.yml/dispatches' \
+                -f ref=main \
+                -f inputs[version]=$VERSION
