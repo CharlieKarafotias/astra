@@ -1,5 +1,11 @@
 # Astra Release Notes
 
+## v1.0.3
+
+### Bug Fix
+- Correct issue with automated releases
+- Update readme with homebrew install directions
+
 ## v1.0.2
 
 ### Improvements

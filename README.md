@@ -39,6 +39,14 @@ astra --help
 ```
 
 ### macOS
+
+_Utilize my homebrew tap to download and manage astra for you_
+```bash
+brew tap charliekarafotias/tools
+brew install astra
+```
+
+_If you prefer to build from source_
 ```bash
 # Clone the repository
 git clone https://github.com/CharlieKarafotias/astra.git
