@@ -42,6 +42,7 @@ pub enum Commands {
         #[arg(value_enum)]
         shell: Shell,
     }
+    // TODO - v1.1.0: Add command for setup configuration (creates&returns path to configuration file)
 }
 
 #[derive(Clone, Debug, Subcommand)]

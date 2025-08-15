@@ -117,9 +117,9 @@ be automatically loaded when the `astra` command runs.
 
 | Operating System | Default Locaton         | Override by setting variable |
 |------------------|-------------------------|------------------------------|
-| Linux            | /home/<user>/.config    | $XDG_CONFIG_HOME             |
-| macOS            | /Users/<user>/.config   | $XDG_CONFIG_HOME             |
-| Windows          | C:\Users\<user>\.config | $XDG_CONFIG_HOME             |
+| Linux            | /home/\<user>/.config    | $XDG_CONFIG_HOME             |
+| macOS            | /Users/\<user>/.config   | $XDG_CONFIG_HOME             |
+| Windows          | C:\Users\\\<user>\\.config | $XDG_CONFIG_HOME             |
 
 _Astra uses the [`cross-xdg`](https://lib.rs/crates/cross-xdg) crate for this functionality_
 

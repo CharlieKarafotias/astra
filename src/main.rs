@@ -55,6 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             generate(shell, &mut Cli::command(), "astra", &mut std::io::stdout());
         }
         None => {
+            // TODO - v1.1.0: Update this logic to respect configuration file if present. Need to add function to read config file.
             // Default to generate a random image
             // TODO: Ideally, there's preferences for types of images user likes and pref for how often to change wallpaper
             // I think in install directions, should have option to call astra on startup of terminal and auto check if wallpaper needs to be changed based on some preference of how often
