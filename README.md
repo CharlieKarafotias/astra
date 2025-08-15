@@ -106,6 +106,38 @@ astra clean
 astra --help
 ```
 
+### ⚙️ Configuration File
+
+Astra supports an optional JSON configuration file that allows you to customize
+its behavior without needing to pass flags or subcommands every time. This file
+can be placed at a standard location depending on your OS (see below) and will
+be automatically loaded when the `astra` command runs.
+
+#### Standard Location For File Based On OS
+
+| Operating System | Default Locaton         | Override by setting variable |
+|------------------|-------------------------|------------------------------|
+| Linux            | /home/<user>/.config    | $XDG_CONFIG_HOME             |
+| macOS            | /Users/<user>/.config   | $XDG_CONFIG_HOME             |
+| Windows          | C:\Users\<user>\.config | $XDG_CONFIG_HOME             |
+
+_Astra uses the [`cross-xdg`](https://lib.rs/crates/cross-xdg) crate for this functionality_
+
+#### Supported Configuration Keys
+
+Use the configuration file to specify how often wallpapers should update,
+which generators to use, and more. If no configuration file exists **OR** 
+the configuration file is an empty object `{}`, the `astra` command will 
+randomly select a wallpaper generator and generate a new image.
+
+| Key        | Type   | Description                          | Regex Format            | Example       | Default Behavior                                                |
+|------------|--------|--------------------------------------|-------------------------|---------------|-----------------------------------------------------------------|
+| frequency  | String | Controls automatic wallpaper updates | ^\d+[s \| m \| h \| d]$ | 1d            | Will always update wallpaper when astra command runs            |
+| generators | array  | List of wallpaper generators to use  | N/A                     | ["spotlight"] | All generators are available; astra command picks one at random |
+
+💡 More keys and customization options may be added in future releases. Feel free to suggest ideas or contribute!
+
+
 ## 🤝 Contributing
 
 Contributions are welcome! Reach out to [Charlie Karafotias](https://github.com/CharlieKarafotias) for how to contribute.
