@@ -10,7 +10,12 @@
 - `astra` command functionality
   - Running `astra` will first check for configuration file. If it exists, respect settings
   - The `astra` command can be called on terminal startup. If user specifies frequency for wallpaper updates, will update if needed.
-  - Fallback to existing functionality when no configuration file (randomly select wallpaper generator) 
+  - Fallback to existing functionality when no configuration file (randomly select wallpaper generator)
+- Generated wallpapers are no longer added to the astra wallpapers folder on Desktop. Instead, find them in the following places:
+
+| Linux                                                                  | Windows                                                           | macOS                                                                    |
+|------------------------------------------------------------------------|-------------------------------------------------------------------|--------------------------------------------------------------------------|
+| $XDG_DATA_HOME/astra/wallpapers OR $HOME/.local/share/astra/wallpapers | {FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\data\wallpapers | $HOME/Library/Application Support/dev.CharlieKarafotias.Astra/wallpapers |
 
 ## v1.0.3
 

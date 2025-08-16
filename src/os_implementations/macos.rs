@@ -77,17 +77,6 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
     Ok(())
 }
 
-/// Returns the path to the desktop folder on the local machine.
-///
-/// # Errors
-///
-/// If the `HOME` environment variable cannot be found, this function will return an
-/// `Err` containing a `MacOSError` with the `HomeEnvVarNotFound` variant.
-pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, MacOSError> {
-    let home_dir = env::var("HOME").map_err(|_| MacOSError::HomeEnvVarNotFound)?;
-    let desktop_path = PathBuf::from(home_dir).join("Desktop");
-    Ok(desktop_path)
-}
 // --- OS specific code ---
 
 // --- Helper functions ---

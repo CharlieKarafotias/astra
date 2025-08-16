@@ -115,6 +115,7 @@ be automatically loaded when the `astra` command runs.
 
 #### Standard Location For File Based On OS
 
+TODO: update me with the right paths
 | Operating System | Default Locaton         | Override by setting variable |
 |------------------|-------------------------|------------------------------|
 | Linux            | /home/\<user>/.config    | $XDG_CONFIG_HOME             |

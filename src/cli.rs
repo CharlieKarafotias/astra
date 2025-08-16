@@ -41,8 +41,7 @@ pub enum Commands {
         /// The shell to generate completion scripts for
         #[arg(value_enum)]
         shell: Shell,
-    }
-    // TODO - v1.1.0: Add command for setup configuration (creates&returns path to configuration file)
+    }, // TODO - v1.1.0: Add command for setup configuration (creates&returns path to configuration file)
 }
 
 #[derive(Clone, Debug, Subcommand)]

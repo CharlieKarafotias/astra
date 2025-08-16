@@ -1,4 +1,5 @@
 mod cli;
+mod constants;
 mod os_implementations;
 mod wallpaper_generators;
 
@@ -56,6 +57,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         None => {
             // TODO - v1.1.0: Update this logic to respect configuration file if present. Need to add function to read config file.
+            // References:
+            // - https://docs.rs/directories/latest/directories/
+            // - https://docs.rs/regex/latest/regex/
+            // - JSON serde and serde for turning config to struct
             // Default to generate a random image
             // TODO: Ideally, there's preferences for types of images user likes and pref for how often to change wallpaper
             // I think in install directions, should have option to call astra on startup of terminal and auto check if wallpaper needs to be changed based on some preference of how often

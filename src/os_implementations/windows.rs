@@ -85,24 +85,6 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
         .map_err(|e| WindowsError::UpdateDesktopError(format!("SystemParametersInfoW failed: {e}")))
 }
 
-/// Returns the path to the desktop folder on the local machine.
-///
-/// # Errors
-///
-/// If the `powershell` command cannot be executed for any reason, this function will return an
-/// `Err` containing a `WindowsError` with the `DesktopPathError` variant.
-pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, WindowsError> {
-    let raw_path: PWSTR;
-    let os_str: OsString;
-    unsafe {
-        raw_path = SHGetKnownFolderPath(&FOLDERID_Desktop, KF_FLAG_DEFAULT, None).map_err(|e| {
-            WindowsError::DesktopPathError(format!("SHGetKnownFolderPath failed: {e}"))
-        })?;
-        os_str = OsString::from_wide(raw_path.as_wide());
-    }
-    Ok(PathBuf::from(os_str))
-}
-
 // --- OS specific code ---
 
 // --- Errors ---

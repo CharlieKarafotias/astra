@@ -89,21 +89,6 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
     Ok(())
 }
 
-/// Returns the path to the user's desktop folder. This relies on the `xdg-user-dir` command to
-/// determine the path.
-///
-/// # Errors
-///
-/// Returns a `LinuxOSError` with the `CommandError` variant if the `xdg-user-dir` command
-/// cannot be executed.
-pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, LinuxOSError> {
-    let output = Command::new("xdg-user-dir")
-        .arg("DESKTOP")
-        .output()
-        .map_err(|e| LinuxOSError::CommandError(e.to_string()))?;
-    let desktop_path = String::from_utf8_lossy(&output.stdout);
-    Ok(PathBuf::from(desktop_path.trim()))
-}
 // --- OS specific code ---
 
 // --- Helper functions ---

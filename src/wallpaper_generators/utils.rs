@@ -1,31 +1,33 @@
 use super::super::cli::Config;
-use super::super::os_implementations::path_to_desktop_folder;
+use super::super::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
+use directories::ProjectDirs;
 use image::{ImageBuffer, Rgb};
-use std::fs::{read_dir, remove_dir_all, remove_file};
 use std::{
     error::Error,
-    fs::create_dir_all,
+    fs::{create_dir_all, read_dir, remove_dir_all, remove_file},
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 pub type AstraImage = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
-/// Creates a folder named "astra_wallpapers" on the desktop.
+/// Creates a folder named "wallpapers" under the data_dir folder of Astra.
+/// For each path, see: https://lib.rs/crates/directories
 ///
 /// # Returns
 ///
 /// A `Result` containing the path to the created folder on success, or a
 /// `WallpaperGeneratorError` on failure.
 pub(super) fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorError> {
-    let path = path_to_desktop_folder()
-        .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
-        .join("astra_wallpapers");
+    let proj_dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        .ok_or_else(|| WallpaperGeneratorError::OSError("could not derive data_dir".to_string()))?;
+    let path = proj_dirs.data_dir().join("Wallpapers");
     create_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
     Ok(path)
 }
 
-/// Deletes wallpapers from the "astra_wallpapers" folder.
+/// Deletes wallpapers from the "wallpapers" folder.
+/// For each path, see: https://lib.rs/crates/directories
 ///
 /// # Arguments
 ///
@@ -42,9 +44,9 @@ pub fn delete_wallpapers(
     delete_dir: bool,
     older_than_in_days: Option<u64>,
 ) -> Result<(), WallpaperGeneratorError> {
-    let path = path_to_desktop_folder()
-        .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
-        .join("astra_wallpapers");
+    let proj_dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        .ok_or_else(|| WallpaperGeneratorError::OSError("could not derive data_dir".to_string()))?;
+    let path = proj_dirs.data_dir().join("Wallpapers");
     config.print_if_verbose(format!("Deleting wallpapers from {}", path.display()).as_str());
     if delete_dir {
         remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
