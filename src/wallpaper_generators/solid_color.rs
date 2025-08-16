@@ -1,4 +1,5 @@
-use super::super::cli::{Config, Mode, SolidMode};
+use super::super::cli::{Mode, SolidMode};
+use super::super::config::Config;
 use super::super::os_implementations::get_screen_resolution;
 use super::utils::{AstraImage, WallpaperGeneratorError};
 use clap::ValueEnum;

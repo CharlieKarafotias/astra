@@ -1,4 +1,5 @@
-use super::super::cli::{Config, Mode};
+use super::super::cli::Mode;
+use super::super::config::Config;
 use super::super::os_implementations::{get_screen_resolution, is_dark_mode_active};
 use super::utils::{AstraImage, Operator, WallpaperGeneratorError, create_color_map, scale_image};
 use crate::wallpaper_generators::color_themes::ThemeSelector;

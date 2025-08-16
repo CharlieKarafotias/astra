@@ -1,11 +1,13 @@
 mod cli;
+mod config;
 mod constants;
 mod os_implementations;
 mod wallpaper_generators;
 
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
-use cli::{Cli, Commands, Config, ImageType, Mode, SolidMode};
+use cli::{Cli, Commands, ImageType, Mode, SolidMode};
+use config::Config;
 use os_implementations::update_wallpaper;
 use rand::random_range;
 use std::path::PathBuf;

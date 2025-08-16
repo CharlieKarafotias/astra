@@ -1,5 +1,5 @@
 use super::super::{
-    cli::Config,
+    config::Config,
     constants::{APPLICATION, ORGANIZATION, QUALIFIER},
 };
 use directories::ProjectDirs;

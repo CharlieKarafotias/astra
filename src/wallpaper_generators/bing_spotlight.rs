@@ -1,4 +1,4 @@
-use super::super::cli::{Config, Mode};
+use super::super::{cli::Mode, config::Config};
 use super::utils::{AstraImage, WallpaperGeneratorError};
 use serde::Deserialize;
 
