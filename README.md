@@ -115,14 +115,11 @@ be automatically loaded when the `astra` command runs.
 
 #### Standard Location For File Based On OS
 
-TODO: update me with the right paths
-| Operating System | Default Locaton         | Override by setting variable |
-|------------------|-------------------------|------------------------------|
-| Linux            | /home/\<user>/.config    | $XDG_CONFIG_HOME             |
-| macOS            | /Users/\<user>/.config   | $XDG_CONFIG_HOME             |
-| Windows          | C:\Users\\\<user>\\.config | $XDG_CONFIG_HOME             |
+| Linux                                                          | Windows                                                              | macOS                                                                     |
+|----------------------------------------------------------------|----------------------------------------------------------------------|---------------------------------------------------------------------------|
+| $XDG_DATA_HOME/astra/config.json or $HOME/.config/astra/config.json | {FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\config\config.json | $HOME/Library/Application Support/dev.CharlieKarafotias.Astra/config.json |
 
-_Astra uses the [`cross-xdg`](https://lib.rs/crates/cross-xdg) crate for this functionality_
+_Astra uses the [`directories`](https://lib.rs/crates/directories) crate for this functionality_
 
 #### Supported Configuration Keys
 

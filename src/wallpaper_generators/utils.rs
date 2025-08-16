@@ -1,5 +1,7 @@
-use super::super::cli::Config;
-use super::super::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
+use super::super::{
+    cli::Config,
+    constants::{APPLICATION, ORGANIZATION, QUALIFIER},
+};
 use directories::ProjectDirs;
 use image::{ImageBuffer, Rgb};
 use std::{

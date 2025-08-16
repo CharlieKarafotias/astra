@@ -16,6 +16,7 @@ use wallpaper_generators::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+    // TODO: needs to throw error if config file is malformed
     let config = Config::new(cli.verbose);
 
     match cli.command {
@@ -46,6 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let image_buf = match &image {
                 ImageType::Julia => generate_julia_set(&config, None),
                 ImageType::Solid { mode } => {
+                    // TODO: should pass mode by reference not clone
                     generate_solid_color(&config, Some(Mode::Solid(mode.clone())))
                 } // TODO: improve this
                 ImageType::Spotlight => generate_bing_spotlight(&config, None),
