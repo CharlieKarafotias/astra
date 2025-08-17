@@ -3,36 +3,42 @@ use super::{
     constants::{APPLICATION, ORGANIZATION, QUALIFIER},
 };
 use directories::ProjectDirs;
+use regex::Regex;
 use serde::Deserialize;
 use serde_json;
-use std::{fs, path::Path};
+use std::{error::Error, fmt::Display, fs, path::Path};
 
 pub struct Config {
     // From CLI options
     verbose: bool,
 
     // User configurations
-    frequency: Option<String>,
-    generators: Option<Vec<ImageType>>,
+    frequency: Option<Frequency>,
+    generators: Option<Generators>,
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
 struct UserConfig {
-    frequency: Option<String>,
-    #[serde(default, deserialize_with = "deserialize_generators")]
-    generators: Option<Vec<ImageType>>,
+    frequency: Option<Frequency>,
+    generators: Option<Generators>,
 }
 
 impl Config {
     pub fn new(verbose: bool) -> Self {
-        let UserConfig {
-            frequency,
-            generators,
-        } = Config::read_config_file_if_exists();
-        Self {
-            frequency,
-            generators,
-            verbose,
+        match Config::read_config_file_if_exists() {
+            Ok(user_config) => Self {
+                verbose,
+                frequency: user_config.frequency,
+                generators: user_config.generators,
+            },
+            Err(e) => {
+                println!("WARN - ignoring config due to error(s): {e}");
+                Self {
+                    verbose,
+                    frequency: None,
+                    generators: None,
+                }
+            },
         }
     }
 
@@ -42,38 +48,92 @@ impl Config {
         }
     }
 
-    fn read_config_file_if_exists() -> UserConfig {
+    fn read_config_file_if_exists() -> Result<UserConfig, ConfigError> {
         ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
             .map(|dirs| dirs.data_dir().join("config.json"))
             .filter(|path| path.exists())
             .map(|path| Self::read_config_file(&path))
-            .unwrap_or_default()
+            .unwrap()
     }
 
-    fn read_config_file(path: &Path) -> UserConfig {
+    fn read_config_file(path: &Path) -> Result<UserConfig, ConfigError> {
         match fs::read_to_string(path) {
-            Ok(data) => serde_json::from_str(&data).unwrap_or_default(), // TODO: add proper error handling to inform user of config error instead of default
-            Err(_) => UserConfig::default(),
+            Ok(data) => {
+                Ok(serde_json::from_str(&data)
+                    .map_err(|e| ConfigError::ParseError(e.to_string())))?
+            }
+            Err(_) => Ok(UserConfig::default()),
         }
     }
 }
 
-fn deserialize_generators<'de, D>(deserializer: D) -> Result<Option<Vec<ImageType>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let raw: Option<Vec<String>> = Option::deserialize(deserializer)?;
-    match raw {
-        Some(list) => {
-            let parsed = list
-                .into_iter()
-                .map(|s| s.parse().map_err(serde::de::Error::custom))
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(Some(parsed))
+#[derive(Debug, PartialEq)]
+struct Generators(Vec<ImageType>);
+
+impl<'de> Deserialize<'de> for Generators {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw: Option<Vec<String>> = Option::deserialize(deserializer)?;
+        match raw {
+            Some(list) => {
+                let parsed = list
+                    .into_iter()
+                    .map(|s| s.parse().map_err(serde::de::Error::custom))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(Generators(parsed))
+            }
+            None => Ok(Generators(Vec::new())),
         }
-        None => Ok(None),
     }
 }
+
+#[derive(Debug, PartialEq)]
+struct Frequency(String);
+
+impl Frequency {
+    fn to_seconds(self) -> u32 {
+        todo!(
+            "Implement to seconds when adding the automatic wallpaper adjuster feature for each OS"
+        );
+    }
+}
+
+impl<'de> Deserialize<'de> for Frequency {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let re = Regex::new(r"^\d+(s|m|d|w|M|y)$").unwrap();
+        if re.is_match(&s) {
+            Ok(Frequency(s))
+        } else {
+            Err(serde::de::Error::custom(format!(
+                "Invalid frequency format: {}",
+                s
+            )))
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ConfigError {
+    ParseError(String),
+}
+
+impl Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigError::ParseError(err_msg) => {
+                write!(f, "Unable to parse configuration file: {err_msg}")
+            }
+        }
+    }
+}
+
+impl Error for ConfigError {}
 
 #[cfg(test)]
 mod tests {
@@ -85,7 +145,7 @@ mod tests {
     fn test_read_config_file_returns_default_for_missing_file() {
         let path = PathBuf::from("nonexistent_config.json");
         let config = Config::read_config_file(&path);
-        assert_eq!(config, UserConfig::default());
+        assert_eq!(config, Ok(UserConfig::default()));
     }
 
     #[test]
@@ -94,8 +154,8 @@ mod tests {
         let path = dir.path().join("config.json");
         fs::write(&path, r#"{ "frequency": "1w" }"#).unwrap();
 
-        let config = Config::read_config_file(&path);
-        assert_eq!(config.frequency, Some("1w".to_string()));
+        let config = Config::read_config_file(&path).expect("file should exist");
+        assert_eq!(config.frequency, Some(Frequency("1w".to_string())));
         assert_eq!(config.generators, None);
     }
 
@@ -109,17 +169,17 @@ mod tests {
         )
         .unwrap();
 
-        let config = Config::read_config_file(&path);
+        let config = Config::read_config_file(&path).expect("file should exist");
         assert_eq!(config.frequency, None);
         assert_eq!(
             config.generators,
-            Some(Vec::from([
+            Some(Generators(Vec::from([
                 ImageType::Spotlight,
                 ImageType::Julia,
                 ImageType::Solid {
                     mode: SolidMode::Random
                 }
-            ]))
+            ])))
         );
     }
 
@@ -129,7 +189,7 @@ mod tests {
         let path = dir.path().join("config.json");
         fs::write(&path, r#"{}"#).unwrap();
 
-        let config = Config::read_config_file(&path);
+        let config = Config::read_config_file(&path).expect("file should exist");
         assert_eq!(config, UserConfig::default());
     }
 }
