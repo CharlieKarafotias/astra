@@ -5,7 +5,7 @@ use super::utils::{AstraImage, WallpaperGeneratorError};
 use clap::ValueEnum;
 use image::{ImageBuffer, Rgb};
 
-#[derive(Copy, Clone, Debug, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
 pub enum Color {
     White,
     Black,

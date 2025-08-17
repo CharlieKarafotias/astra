@@ -1,9 +1,7 @@
-use super::{
-    Color,
-    constants::{APPLICATION, ORGANIZATION, QUALIFIER},
-};
+use super::Color;
 use clap::{Parser, Subcommand};
 use clap_complete::Shell;
+use std::str::FromStr;
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -47,7 +45,7 @@ pub enum Commands {
     }, // TODO - v1.1.0: Add command for setup configuration (creates&returns path to configuration file)
 }
 
-#[derive(Clone, Debug, Subcommand)]
+#[derive(Clone, Debug, PartialEq, Subcommand)]
 pub enum ImageType {
     /// Sets wallpaper to a randomly generated Julia Set
     Julia,
@@ -60,7 +58,22 @@ pub enum ImageType {
     Spotlight,
 }
 
-#[derive(Clone, Debug, Subcommand)]
+impl FromStr for ImageType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "julia" => Ok(ImageType::Julia),
+            "spotlight" => Ok(ImageType::Spotlight),
+            "solid" => Ok(ImageType::Solid {
+                mode: SolidMode::Random,
+            }),
+            _ => Err(format!("Unknown generator type: {}", s)),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Subcommand)]
 pub enum SolidMode {
     /// Use a pre-defined color
     Color {
