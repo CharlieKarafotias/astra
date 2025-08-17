@@ -18,7 +18,6 @@ use wallpaper_generators::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    // TODO: needs to throw error if config file is malformed
     let config = Config::new(cli.verbose);
 
     match cli.command {

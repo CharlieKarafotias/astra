@@ -49,11 +49,13 @@ impl Config {
     }
 
     fn read_config_file_if_exists() -> Result<UserConfig, ConfigError> {
-        ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        let path = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
             .map(|dirs| dirs.data_dir().join("config.json"))
-            .filter(|path| path.exists())
-            .map(|path| Self::read_config_file(&path))
-            .unwrap()
+            .filter(|path| path.exists());
+        match path {
+            Some(existing_path) => Self::read_config_file(&existing_path),
+            None => Ok(UserConfig::default()),
+        }
     }
 
     fn read_config_file(path: &Path) -> Result<UserConfig, ConfigError> {
