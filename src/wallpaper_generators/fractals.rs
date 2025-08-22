@@ -10,7 +10,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 pub fn generate_julia_set(
     config: &Config,
-    _mode: Option<Mode>,
+    _mode: Option<&Mode>,
 ) -> Result<AstraImage, WallpaperGeneratorError> {
     config.print_if_verbose("Generating julia set...");
     let (width, height) =

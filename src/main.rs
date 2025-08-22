@@ -6,15 +6,17 @@ mod wallpaper_generators;
 
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
-use cli::{Cli, Commands, ImageType, Mode, SolidMode};
-use config::Config;
+use cli::{Cli, Commands, ImageType, Mode};
+use config::{Config, Generators};
 use os_implementations::update_wallpaper;
 use rand::random_range;
 use std::path::PathBuf;
 use wallpaper_generators::{
-    AstraImage, Color, WallpaperGeneratorError, delete_wallpapers, generate_bing_spotlight,
-    generate_julia_set, generate_solid_color, save_image,
+    ALL_GENERATORS, AstraImage, Color, WallpaperGeneratorError, delete_wallpapers,
+    generate_bing_spotlight, generate_julia_set, generate_solid_color, save_image,
 };
+
+use crate::wallpaper_generators::map_image_type_to_default;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -67,24 +69,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Default to generate a random image
             // TODO: Ideally, there's preferences for types of images user likes and pref for how often to change wallpaper
             // I think in install directions, should have option to call astra on startup of terminal and auto check if wallpaper needs to be changed based on some preference of how often
-            let generators: [(
-                fn(
-                    config: &Config,
-                    mode: Option<Mode>,
-                ) -> Result<AstraImage, WallpaperGeneratorError>,
-                ImageType,
-            ); 3] = [
-                (generate_julia_set, ImageType::Julia),
-                (
-                    generate_solid_color,
-                    ImageType::Solid {
-                        mode: SolidMode::Random,
-                    },
-                ),
-                (generate_bing_spotlight, ImageType::Spotlight),
-            ];
+            let generators = config
+                .generators()
+                .map(|generators| generators.to_vec())
+                .unwrap_or(&Vec::from(ALL_GENERATORS));
+            let frequency = config.frequency();
+
             let index = random_range(0..generators.len());
-            let image_type = generators[index].1.clone();
+            let image_type = &generators[index];
+            let func = map_image_type_to_default(&image_type);
             let image_buf = match &image_type {
                 ImageType::Solid { mode } => {
                     generate_solid_color(&config, Some(Mode::Solid(mode.clone())))?

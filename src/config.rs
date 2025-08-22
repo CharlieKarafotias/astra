@@ -25,20 +25,22 @@ struct UserConfig {
 
 impl Config {
     pub fn new(verbose: bool) -> Self {
-        match Config::read_config_file_if_exists() {
+        match Config::read_config_file_if_exists(verbose) {
             Ok(user_config) => Self {
                 verbose,
                 frequency: user_config.frequency,
                 generators: user_config.generators,
             },
             Err(e) => {
-                println!("WARN - ignoring config due to error(s): {e}");
+                if verbose {
+                    println!("WARN - ignoring configuration due to error(s): {e}");
+                }
                 Self {
                     verbose,
                     frequency: None,
                     generators: None,
                 }
-            },
+            }
         }
     }
 
@@ -48,21 +50,38 @@ impl Config {
         }
     }
 
-    fn read_config_file_if_exists() -> Result<UserConfig, ConfigError> {
+    pub fn generators(&self) -> &Option<Generators> {
+        &self.generators
+    }
+
+    pub fn frequency(&self) -> &Option<Frequency> {
+        &self.frequency
+    }
+
+    fn read_config_file_if_exists(verbose: bool) -> Result<UserConfig, ConfigError> {
         let path = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
             .map(|dirs| dirs.data_dir().join("config.json"))
             .filter(|path| path.exists());
         match path {
-            Some(existing_path) => Self::read_config_file(&existing_path),
-            None => Ok(UserConfig::default()),
+            Some(existing_path) => {
+                if verbose {
+                    println!("reading configuration file at {}", existing_path.display());
+                }
+                Self::read_config_file(&existing_path)
+            }
+            None => {
+                if verbose {
+                    println!("no configuration file found, using defaults")
+                }
+                Ok(UserConfig::default())
+            }
         }
     }
 
     fn read_config_file(path: &Path) -> Result<UserConfig, ConfigError> {
         match fs::read_to_string(path) {
             Ok(data) => {
-                Ok(serde_json::from_str(&data)
-                    .map_err(|e| ConfigError::ParseError(e.to_string())))?
+                Ok(serde_json::from_str(&data).map_err(|e| ConfigError::ParseError(e.to_string())))?
             }
             Err(_) => Ok(UserConfig::default()),
         }
@@ -70,7 +89,13 @@ impl Config {
 }
 
 #[derive(Debug, PartialEq)]
-struct Generators(Vec<ImageType>);
+pub struct Generators(pub Vec<ImageType>);
+
+impl Generators {
+    pub fn to_vec(&self) -> &Vec<ImageType> {
+        &self.0
+    }
+}
 
 impl<'de> Deserialize<'de> for Generators {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
