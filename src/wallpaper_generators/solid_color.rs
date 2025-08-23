@@ -1,4 +1,4 @@
-use super::super::cli::{Mode, SolidMode};
+use super::super::cli::SolidMode;
 use super::super::config::Config;
 use super::super::os_implementations::get_screen_resolution;
 use super::utils::{AstraImage, WallpaperGeneratorError};
@@ -58,7 +58,7 @@ impl Color {
 
 pub fn generate_solid_color(
     config: &Config,
-    mode: Option<&Mode>,
+    mode: &SolidMode,
 ) -> Result<AstraImage, WallpaperGeneratorError> {
     config.print_if_verbose("Generating solid color...");
 
@@ -68,21 +68,8 @@ pub fn generate_solid_color(
 
     config.print_if_verbose("Generating image...");
 
-    let mode = mode.ok_or(WallpaperGeneratorError::NoModeProvided(
-        "Solid color generator requires a SolidMode".to_string(),
-    ))?;
-    // Expect a SolidMode, error is other mode provided
-    let solid_mode = match mode {
-        Mode::Solid(mode) => mode,
-        // Leave this in as in the future more modes can be added
-        _ => {
-            return Err(WallpaperGeneratorError::InvalidMode(
-                "SolidMode".to_string(),
-            ));
-        }
-    };
-    let imgbuf = match solid_mode {
-        &SolidMode::Random => ImageBuffer::from_pixel(
+    let imgbuf = match mode {
+        SolidMode::Random => ImageBuffer::from_pixel(
             width,
             height,
             Rgb([
@@ -91,8 +78,10 @@ pub fn generate_solid_color(
                 rand::random::<u8>(),
             ]),
         ),
-        &SolidMode::Rgb { r, g, b } => ImageBuffer::from_pixel(width, height, Rgb([r, g, b])),
-        &SolidMode::Color { name } => {
+        SolidMode::Rgb { r, g, b } => {
+            ImageBuffer::from_pixel(width, height, Rgb([r.clone(), g.clone(), b.clone()]))
+        }
+        SolidMode::Color { name } => {
             let (r, g, b) = name.rgb();
             ImageBuffer::from_pixel(width, height, Rgb([r, g, b]))
         }

@@ -1,5 +1,5 @@
 use super::{
-    cli::ImageType,
+    cli::{Generator, SolidMode},
     constants::{APPLICATION, ORGANIZATION, QUALIFIER},
 };
 use directories::ProjectDirs;
@@ -50,12 +50,12 @@ impl Config {
         }
     }
 
-    pub fn generators(&self) -> &Option<Generators> {
-        &self.generators
+    pub fn generators(&self) -> Option<&Generators> {
+        self.generators.as_ref()
     }
 
-    pub fn frequency(&self) -> &Option<Frequency> {
-        &self.frequency
+    pub fn frequency(&self) -> Option<&Frequency> {
+        self.frequency.as_ref()
     }
 
     fn read_config_file_if_exists(verbose: bool) -> Result<UserConfig, ConfigError> {
@@ -89,10 +89,22 @@ impl Config {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Generators(pub Vec<ImageType>);
+pub struct Generators(pub Vec<Generator>);
 
 impl Generators {
-    pub fn to_vec(&self) -> &Vec<ImageType> {
+    pub const ALL_GENERATORS: [Generator; 3] = [
+        Generator::Julia,
+        Generator::Solid {
+            mode: SolidMode::Random,
+        },
+        Generator::Spotlight,
+    ];
+}
+
+impl std::ops::Deref for Generators {
+    type Target = Vec<Generator>;
+
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -117,7 +129,7 @@ impl<'de> Deserialize<'de> for Generators {
 }
 
 #[derive(Debug, PartialEq)]
-struct Frequency(String);
+pub struct Frequency(String);
 
 impl Frequency {
     fn to_seconds(self) -> u32 {
@@ -201,9 +213,9 @@ mod tests {
         assert_eq!(
             config.generators,
             Some(Generators(Vec::from([
-                ImageType::Spotlight,
-                ImageType::Julia,
-                ImageType::Solid {
+                Generator::Spotlight,
+                Generator::Julia,
+                Generator::Solid {
                     mode: SolidMode::Random
                 }
             ])))

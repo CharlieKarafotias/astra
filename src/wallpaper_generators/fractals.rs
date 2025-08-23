@@ -1,4 +1,3 @@
-use super::super::cli::Mode;
 use super::super::config::Config;
 use super::super::os_implementations::{get_screen_resolution, is_dark_mode_active};
 use super::utils::{AstraImage, Operator, WallpaperGeneratorError, create_color_map, scale_image};
@@ -8,10 +7,7 @@ use num_complex::Complex;
 use rand::random_range;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-pub fn generate_julia_set(
-    config: &Config,
-    _mode: Option<&Mode>,
-) -> Result<AstraImage, WallpaperGeneratorError> {
+pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGeneratorError> {
     config.print_if_verbose("Generating julia set...");
     let (width, height) =
         get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;

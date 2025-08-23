@@ -1,3 +1,11 @@
+use crate::{
+    config::Config,
+    wallpaper_generators::{
+        AstraImage, WallpaperGeneratorError, generate_bing_spotlight, generate_julia_set,
+        generate_solid_color,
+    },
+};
+
 use super::Color;
 use clap::{Parser, Subcommand};
 use clap_complete::Shell;
@@ -29,7 +37,7 @@ pub enum Commands {
     Generate {
         /// The type of image to generate
         #[command(subcommand)]
-        image: ImageType,
+        image: Generator,
         #[arg(long)]
         /// Skip saving the image to the "astra_wallpapers" folder.
         no_save: bool,
@@ -46,7 +54,7 @@ pub enum Commands {
 }
 
 #[derive(Clone, Debug, PartialEq, Subcommand)]
-pub enum ImageType {
+pub enum Generator {
     /// Sets wallpaper to a randomly generated Julia Set
     Julia,
     /// Sets wallpaper to a solid color
@@ -58,17 +66,30 @@ pub enum ImageType {
     Spotlight,
 }
 
-impl FromStr for ImageType {
+impl FromStr for Generator {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "julia" => Ok(ImageType::Julia),
-            "spotlight" => Ok(ImageType::Spotlight),
-            "solid" => Ok(ImageType::Solid {
+            "julia" => Ok(Generator::Julia),
+            "spotlight" => Ok(Generator::Spotlight),
+            "solid" => Ok(Generator::Solid {
                 mode: SolidMode::Random,
             }),
             _ => Err(format!("Unknown generator type: {}", s)),
+        }
+    }
+}
+
+impl Generator {
+    pub fn with_default_mode(
+        &self,
+        config: &Config,
+    ) -> Result<AstraImage, WallpaperGeneratorError> {
+        match self {
+            Generator::Julia => generate_julia_set(config),
+            Generator::Solid { mode } => generate_solid_color(config, mode),
+            Generator::Spotlight => generate_bing_spotlight(config),
         }
     }
 }
@@ -92,8 +113,4 @@ pub enum SolidMode {
         /// Blue component (0-255)
         b: u8,
     },
-}
-
-pub enum Mode {
-    Solid(SolidMode),
 }

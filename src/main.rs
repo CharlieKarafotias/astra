@@ -6,17 +6,15 @@ mod wallpaper_generators;
 
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
-use cli::{Cli, Commands, ImageType, Mode};
+use cli::{Cli, Commands, Generator};
 use config::{Config, Generators};
 use os_implementations::update_wallpaper;
 use rand::random_range;
 use std::path::PathBuf;
 use wallpaper_generators::{
-    ALL_GENERATORS, AstraImage, Color, WallpaperGeneratorError, delete_wallpapers,
-    generate_bing_spotlight, generate_julia_set, generate_solid_color, save_image,
+    AstraImage, Color, WallpaperGeneratorError, delete_wallpapers, generate_bing_spotlight,
+    generate_julia_set, generate_solid_color, save_image,
 };
-
-use crate::wallpaper_generators::map_image_type_to_default;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -48,14 +46,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }) => {
             config.print_if_verbose(format!("Generating image of type: {:?}...", &image).as_str());
             let image_buf = match &image {
-                ImageType::Julia => generate_julia_set(&config, None),
-                ImageType::Solid { mode } => {
-                    // TODO: should pass mode by reference not clone
-                    generate_solid_color(&config, Some(Mode::Solid(mode.clone())))
-                } // TODO: improve this
-                ImageType::Spotlight => generate_bing_spotlight(&config, None),
+                Generator::Julia => generate_julia_set(&config),
+                Generator::Solid { mode } => generate_solid_color(&config, mode),
+                Generator::Spotlight => generate_bing_spotlight(&config),
             }?;
-            handle_generate_options(&config, image_buf, image.clone(), no_save, no_update)?;
+            handle_generate_options(&config, &image_buf, &image, no_save, no_update)?;
         }
         Some(Commands::GenerateCompletions { shell }) => {
             generate(shell, &mut Cli::command(), "astra", &mut std::io::stdout());
@@ -71,21 +66,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // I think in install directions, should have option to call astra on startup of terminal and auto check if wallpaper needs to be changed based on some preference of how often
             let generators = config
                 .generators()
+                .as_ref()
                 .map(|generators| generators.to_vec())
-                .unwrap_or(&Vec::from(ALL_GENERATORS));
-            let frequency = config.frequency();
+                .unwrap_or(Generators::ALL_GENERATORS.to_vec());
+            // TODO: use this to setup automatic wallpaper refresh
+            let _frequency = config.frequency();
 
             let index = random_range(0..generators.len());
             let image_type = &generators[index];
-            let func = map_image_type_to_default(&image_type);
-            let image_buf = match &image_type {
-                ImageType::Solid { mode } => {
-                    generate_solid_color(&config, Some(Mode::Solid(mode.clone())))?
-                }
-                ImageType::Julia => generate_julia_set(&config, None)?,
-                ImageType::Spotlight => generate_bing_spotlight(&config, None)?,
-            };
-            handle_generate_options(&config, image_buf, image_type, false, false)?;
+            let image_buf = image_type.with_default_mode(&config)?;
+            handle_generate_options(&config, &image_buf, image_type, false, false)?;
         }
     };
 
@@ -95,13 +85,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 // TODO: move to astra_logic module
 fn save_image_to_astra_folder(
     config: &Config,
-    image: &ImageType,
+    image: &Generator,
     image_buf: &AstraImage,
 ) -> Result<PathBuf, WallpaperGeneratorError> {
     let prefix = match image {
-        ImageType::Julia => "julia",
-        ImageType::Solid { .. } => "solid",
-        ImageType::Spotlight => "spotlight",
+        Generator::Julia => "julia",
+        Generator::Solid { .. } => "solid",
+        Generator::Spotlight => "spotlight",
     };
     let path = save_image(&config, prefix, &image_buf)?;
     Ok(path)
@@ -110,8 +100,8 @@ fn save_image_to_astra_folder(
 // TODO: move to astra_logic module
 fn handle_generate_options(
     config: &Config,
-    image_buf: AstraImage,
-    image: ImageType,
+    image_buf: &AstraImage,
+    image: &Generator,
     no_save: bool,
     no_update: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -121,7 +111,7 @@ fn handle_generate_options(
             "NOTE: to update wallpaper, astra must save the image to astra_wallpapers folder.",
         );
         // Updating requires a saved image
-        let saved_image_path = save_image_to_astra_folder(&config, &image, &image_buf)?;
+        let saved_image_path = save_image_to_astra_folder(config, image, image_buf)?;
         // TODO: move verbose logs into OS implementations of update_wallpaper
         config.print_if_verbose("Updating wallpaper...");
         update_wallpaper(saved_image_path)?;
@@ -129,7 +119,7 @@ fn handle_generate_options(
     }
     // If no_update == false, we already saved the image as its required to update wallpaper
     if no_update && !no_save {
-        let _ = save_image_to_astra_folder(&config, &image, &image_buf)?;
+        let _ = save_image_to_astra_folder(&config, &image, image_buf)?;
     }
     Ok(())
 }

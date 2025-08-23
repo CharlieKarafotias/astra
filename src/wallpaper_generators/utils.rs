@@ -253,7 +253,6 @@ pub enum WallpaperGeneratorError {
     InvalidColorName(String),
     ImageGenerationError(String),
     ImageSaveError,
-    InvalidMode(String),
     NetworkError(String),
     NoModeProvided(String),
     OSError(String),
@@ -283,9 +282,6 @@ impl std::fmt::Display for WallpaperGeneratorError {
             }
             WallpaperGeneratorError::NoModeProvided(msg) => {
                 write!(f, "No mode provided: {}", msg)
-            }
-            WallpaperGeneratorError::InvalidMode(msg) => {
-                write!(f, "Invalid mode provided, expected mode {}", msg)
             }
         }
     }
