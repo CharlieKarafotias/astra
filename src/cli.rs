@@ -33,6 +33,12 @@ pub enum Commands {
         /// Deletes all images and the "astra_wallpapers" directory
         directory: bool,
     },
+    /// Opens the configuration file
+    Config {
+        #[arg(short, long)]
+        /// Open the configuration file in the default text editor
+        open: bool,
+    },
     /// Generates a new wallpaper
     Generate {
         /// The type of image to generate

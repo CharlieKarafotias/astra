@@ -6,7 +6,13 @@ use directories::ProjectDirs;
 use regex::Regex;
 use serde::Deserialize;
 use serde_json;
-use std::{error::Error, fmt::Display, fs, path::Path};
+use std::io::Write;
+use std::{
+    error::Error,
+    fmt::Display,
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub struct Config {
     // From CLI options
@@ -58,23 +64,56 @@ impl Config {
         self.frequency.as_ref()
     }
 
+    pub fn config_dir() -> PathBuf {
+        ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+            .map(|dirs| dirs.config_dir().to_path_buf())
+            .expect("config folders are defined for each OS")
+    }
+
+    pub fn config_path() -> PathBuf {
+        ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+            .map(|dirs| dirs.config_dir().join("config.json"))
+            .expect("config folders are defined for each OS")
+    }
+
+    pub fn create_config_file_if_not_exists(config: &Config) -> Result<(), ConfigError> {
+        if !Self::config_path().exists() {
+            config.print_if_verbose(
+                format!(
+                    "Creating configuration directory at {}...",
+                    Self::config_dir().display()
+                )
+                .as_str(),
+            );
+            fs::create_dir_all(Self::config_dir())
+                .map_err(|e| ConfigError::CreateDirError(e.to_string()))?;
+            config.print_if_verbose(
+                format!(
+                    "Creating configuration file at {}...",
+                    Self::config_path().display()
+                )
+                .as_str(),
+            );
+            let mut f = fs::File::create(Self::config_path())
+                .map_err(|e| ConfigError::CreateFileError(e.to_string()))?;
+            f.write_all(b"{}")
+                .map_err(|e| ConfigError::CreateFileError(e.to_string()))?;
+        }
+        Ok(())
+    }
+
     fn read_config_file_if_exists(verbose: bool) -> Result<UserConfig, ConfigError> {
-        let path = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
-            .map(|dirs| dirs.data_dir().join("config.json"))
-            .filter(|path| path.exists());
-        match path {
-            Some(existing_path) => {
-                if verbose {
-                    println!("reading configuration file at {}", existing_path.display());
-                }
-                Self::read_config_file(&existing_path)
+        let config_path = Config::config_path();
+        if config_path.exists() {
+            if verbose {
+                println!("reading configuration file at {}", &config_path.display());
             }
-            None => {
-                if verbose {
-                    println!("no configuration file found, using defaults")
-                }
-                Ok(UserConfig::default())
+            Self::read_config_file(&config_path)
+        } else {
+            if verbose {
+                println!("no configuration file found, using defaults")
             }
+            Ok(UserConfig::default())
         }
     }
 
@@ -159,12 +198,20 @@ impl<'de> Deserialize<'de> for Frequency {
 
 #[derive(Debug, PartialEq)]
 pub enum ConfigError {
+    CreateDirError(String),
+    CreateFileError(String),
     ParseError(String),
 }
 
 impl Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ConfigError::CreateDirError(err_msg) => {
+                write!(f, "Unable to create configuration directory: {err_msg}")
+            }
+            ConfigError::CreateFileError(err_msg) => {
+                write!(f, "Unable to create configuration file: {err_msg}")
+            }
             ConfigError::ParseError(err_msg) => {
                 write!(f, "Unable to parse configuration file: {err_msg}")
             }

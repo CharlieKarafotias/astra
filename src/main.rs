@@ -39,6 +39,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 delete_wallpapers(&config, true, directory, None)?;
             }
         }
+        Some(Commands::Config { open }) => {
+            config.print_if_verbose("Opening configuration file...");
+            Config::create_config_file_if_not_exists(&config)?;
+            if open {
+                if let Ok(editor) = std::env::var("EDITOR") {
+                    std::process::Command::new(editor)
+                        .arg(Config::config_path())
+                        .status()
+                        .map_err(|e| {
+                            format!("failed to open configuration file: {}", e.to_string())
+                        })?;
+                }
+            } else {
+                println!("{}", Config::config_path().display());
+            }
+        }
         Some(Commands::Generate {
             image,
             no_save,

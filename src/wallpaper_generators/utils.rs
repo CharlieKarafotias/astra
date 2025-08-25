@@ -205,7 +205,7 @@ pub fn save_image(
     image
         .save(&save_path)
         .map_err(|_| WallpaperGeneratorError::ImageSaveError)?;
-    config.print_if_verbose("Image saved to astra_wallpapers folder");
+    config.print_if_verbose(format!("Image saved to astra_wallpapers folder: {}", save_path.display()).as_str());
     Ok(save_path)
 }
 
