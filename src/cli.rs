@@ -33,7 +33,7 @@ pub enum Commands {
         /// Deletes all images and the "astra_wallpapers" directory
         directory: bool,
     },
-    /// Opens the configuration file
+    /// Return path to configuration file (creates config first if it doesn't exist)
     Config {
         #[arg(short, long)]
         /// Open the configuration file in the default text editor
@@ -56,7 +56,7 @@ pub enum Commands {
         /// The shell to generate completion scripts for
         #[arg(value_enum)]
         shell: Shell,
-    }, // TODO - v1.1.0: Add command for setup configuration (creates&returns path to configuration file)
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Subcommand)]
@@ -96,6 +96,14 @@ impl Generator {
             Generator::Julia => generate_julia_set(config),
             Generator::Solid { mode } => generate_solid_color(config, mode),
             Generator::Spotlight => generate_bing_spotlight(config),
+        }
+    }
+
+    pub fn prefix(&self) -> &str {
+        match self {
+            Generator::Julia => "julia",
+            Generator::Solid { mode: _ } => "solid",
+            Generator::Spotlight => "spotlight",
         }
     }
 }

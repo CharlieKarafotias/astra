@@ -8,12 +8,10 @@ use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Commands, Generator};
 use config::{Config, Generators};
-use os_implementations::update_wallpaper;
 use rand::random_range;
-use std::path::PathBuf;
 use wallpaper_generators::{
-    AstraImage, Color, WallpaperGeneratorError, delete_wallpapers, generate_bing_spotlight,
-    generate_julia_set, generate_solid_color, save_image,
+    Color, delete_wallpapers, generate_bing_spotlight, generate_julia_set, generate_solid_color,
+    handle_generate_options,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -72,19 +70,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             generate(shell, &mut Cli::command(), "astra", &mut std::io::stdout());
         }
         None => {
-            // TODO - v1.1.0: Update this logic to respect configuration file if present. Need to add function to read config file.
-            // References:
-            // - https://docs.rs/directories/latest/directories/
-            // - https://docs.rs/regex/latest/regex/
-            // - JSON serde and serde for turning config to struct
-            // Default to generate a random image
-            // TODO: Ideally, there's preferences for types of images user likes and pref for how often to change wallpaper
-            // I think in install directions, should have option to call astra on startup of terminal and auto check if wallpaper needs to be changed based on some preference of how often
             let generators = config
                 .generators()
                 .as_ref()
                 .map(|generators| generators.to_vec())
                 .unwrap_or(Generators::ALL_GENERATORS.to_vec());
+
+            // TODO: add in automatic call of astra on cron schedule
             // TODO: use this to setup automatic wallpaper refresh
             let _frequency = config.frequency();
 
@@ -94,48 +86,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             handle_generate_options(&config, &image_buf, image_type, false, false)?;
         }
     };
-
-    Ok(())
-}
-
-// TODO: move to astra_logic module
-fn save_image_to_astra_folder(
-    config: &Config,
-    image: &Generator,
-    image_buf: &AstraImage,
-) -> Result<PathBuf, WallpaperGeneratorError> {
-    let prefix = match image {
-        Generator::Julia => "julia",
-        Generator::Solid { .. } => "solid",
-        Generator::Spotlight => "spotlight",
-    };
-    let path = save_image(&config, prefix, &image_buf)?;
-    Ok(path)
-}
-
-// TODO: move to astra_logic module
-fn handle_generate_options(
-    config: &Config,
-    image_buf: &AstraImage,
-    image: &Generator,
-    no_save: bool,
-    no_update: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Handle options
-    if !no_update {
-        config.print_if_verbose(
-            "NOTE: to update wallpaper, astra must save the image to astra_wallpapers folder.",
-        );
-        // Updating requires a saved image
-        let saved_image_path = save_image_to_astra_folder(config, image, image_buf)?;
-        // TODO: move verbose logs into OS implementations of update_wallpaper
-        config.print_if_verbose("Updating wallpaper...");
-        update_wallpaper(saved_image_path)?;
-        config.print_if_verbose("Updated wallpaper");
-    }
-    // If no_update == false, we already saved the image as its required to update wallpaper
-    if no_update && !no_save {
-        let _ = save_image_to_astra_folder(&config, &image, image_buf)?;
-    }
     Ok(())
 }

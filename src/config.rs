@@ -6,13 +6,15 @@ use directories::ProjectDirs;
 use regex::Regex;
 use serde::Deserialize;
 use serde_json;
-use std::io::Write;
 use std::{
     error::Error,
     fmt::Display,
     fs,
+    io::Write,
     path::{Path, PathBuf},
 };
+use std::fmt::Formatter;
+use std::ops::Add;
 
 pub struct Config {
     // From CLI options
@@ -27,6 +29,22 @@ pub struct Config {
 struct UserConfig {
     frequency: Option<Frequency>,
     generators: Option<Generators>,
+}
+
+impl Display for UserConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut buf = String::new();
+        if let Some(frequency) = &self.frequency {
+            buf = buf.add(format!("frequency: {}, ", frequency.0).as_str());
+        }
+        if let Some(generators) = &self.generators {
+            buf = buf.add(format!("generators: {:?}, ", generators.0).as_str());
+        }
+        if buf.ends_with(", ") {
+            buf.truncate(buf.len() - 2);
+        }
+        write!(f, "{buf}")
+    }
 }
 
 impl Config {
@@ -64,16 +82,14 @@ impl Config {
         self.frequency.as_ref()
     }
 
-    pub fn config_dir() -> PathBuf {
+    fn config_dir() -> PathBuf {
         ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
             .map(|dirs| dirs.config_dir().to_path_buf())
             .expect("config folders are defined for each OS")
     }
 
     pub fn config_path() -> PathBuf {
-        ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
-            .map(|dirs| dirs.config_dir().join("config.json"))
-            .expect("config folders are defined for each OS")
+        Self::config_dir().join("config.json")
     }
 
     pub fn create_config_file_if_not_exists(config: &Config) -> Result<(), ConfigError> {
@@ -94,9 +110,9 @@ impl Config {
                 )
                 .as_str(),
             );
-            let mut f = fs::File::create(Self::config_path())
-                .map_err(|e| ConfigError::CreateFileError(e.to_string()))?;
-            f.write_all(b"{}")
+            fs::File::create(Self::config_path())
+                .map_err(|e| ConfigError::CreateFileError(e.to_string()))?
+                .write_all(b"{}")
                 .map_err(|e| ConfigError::CreateFileError(e.to_string()))?;
         }
         Ok(())
@@ -108,7 +124,11 @@ impl Config {
             if verbose {
                 println!("reading configuration file at {}", &config_path.display());
             }
-            Self::read_config_file(&config_path)
+            let config = Self::read_config_file(&config_path)?;
+            if verbose {
+                println!("configuration loaded - {config}");
+            }
+            Ok(config)
         } else {
             if verbose {
                 println!("no configuration file found, using defaults")
@@ -184,7 +204,7 @@ impl<'de> Deserialize<'de> for Frequency {
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let re = Regex::new(r"^\d+(s|m|d|w|M|y)$").unwrap();
+        let re = Regex::new(r"^\d+([smdwMy])$").unwrap();
         if re.is_match(&s) {
             Ok(Frequency(s))
         } else {

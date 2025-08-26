@@ -1,4 +1,4 @@
-use std::{env, error::Error, path::PathBuf, process::Command};
+use std::{error::Error, path::PathBuf, process::Command};
 // --- OS specific code ---
 
 /// Checks if the user's OS is currently in dark mode
@@ -211,7 +211,6 @@ fn get_key_value_pair_based_on_spaces<'a>(
 #[derive(Debug, PartialEq)]
 pub enum MacOSError {
     DarkModeError,
-    HomeEnvVarNotFound,
     MainDisplayNotFound,
     ResolutionNotFound,
     SystemProfilerError,
@@ -221,9 +220,6 @@ impl std::fmt::Display for MacOSError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MacOSError::DarkModeError => write!(f, "Unable to determine dark mode status"),
-            MacOSError::HomeEnvVarNotFound => {
-                write!(f, "Unable to find $HOME environment variable")
-            }
             MacOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
             MacOSError::ResolutionNotFound => {
                 write!(f, "Unable to determine resolution of main display")
