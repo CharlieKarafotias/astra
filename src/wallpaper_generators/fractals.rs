@@ -7,6 +7,7 @@ use num_complex::Complex;
 use rand::random_range;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
+// TODO v1.1.0 - rename this to julia.rs as it's only julia set at the moment
 pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGeneratorError> {
     config.print_if_verbose("Generating julia set...");
     let (width, height) =

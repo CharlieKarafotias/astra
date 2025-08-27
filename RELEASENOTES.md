@@ -13,9 +13,12 @@
   - Fallback to existing functionality when no configuration file (randomly select wallpaper generator)
 - Generated wallpapers are no longer added to the astra wallpapers folder on Desktop. Instead, find them in the following places:
 
-| Linux                                                                   | Windows                                                           | macOS                                                                    |
-|-------------------------------------------------------------------------|-------------------------------------------------------------------|--------------------------------------------------------------------------|
-| \$XDG_DATA_HOME/astra/wallpapers OR $HOME/.local/share/astra/wallpapers | {FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\data\wallpapers | $HOME/Library/Application Support/dev.CharlieKarafotias.Astra/wallpapers |
+| OS      | Standard Location                                                         |
+|---------|---------------------------------------------------------------------------|
+| Linux   | \$XDG_DATA_HOME/astra/wallpapers                                          |
+|         | \$HOME/.local/share/astra/wallpapers                                      |
+| macOS   | \$HOME/Library/Application Support/dev.CharlieKarafotias.Astra/wallpapers |
+| Windows | {FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\data\wallpapers         |
 
 ## v1.0.3
 

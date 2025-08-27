@@ -2,6 +2,8 @@ use rand::Rng;
 use rand::distr::{Distribution, StandardUniform};
 use std::fmt::Display;
 
+// TODO v1.1.0 - this really isn't a generator - make new module called generator_utils and move
+// this and utils.rs there
 pub struct ColorTheme {
     name: String,
     supports_dark_mode: bool,

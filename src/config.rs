@@ -25,6 +25,14 @@ pub struct Config {
     generators: Option<Generators>,
 }
 
+// TODO v1.1.0 - there are other fields users can customize. Every image type can have a mode.
+// Solid Color generator: preferred colors from defaults, Random color, list of custom colors in RGB
+// Spotlight generator: Country and locale - default is US and en-US, would be cool to allow specification
+  // looks to be [ISO_3166-1_alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#US), test to confirm
+// julia generator: custom complex numbers, custom color range, sample size for hotspots, more than just gradient for color pattern?
+// Color themes: would be nice to utilize themes across generators
+  // bing spotlight can fetch <= 4 images. grab a few and check for closest matching theme? (provide escape hatch in solid config)
+  // solid_color can generate in color range if themes defined (provide escape hatch in solid config)
 #[derive(Debug, Default, Deserialize, PartialEq)]
 struct UserConfig {
     frequency: Option<Frequency>,
