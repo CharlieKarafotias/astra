@@ -193,7 +193,9 @@ pub struct Frequency(String);
 impl Frequency {
     fn to_seconds(&self) -> Result<u32, ConfigError> {
         if self.0.is_empty() {
-            return Err(ConfigError::ParseError("frequency cannot be empty".to_string()));
+            return Err(ConfigError::ParseError(
+                "frequency cannot be empty".to_string(),
+            ));
         }
         let num = self.0[..self.0.len() - 1].parse::<u32>().map_err(|_| {
             ConfigError::ParseError("expected frequency to start with number".to_string())
@@ -384,7 +386,9 @@ mod tests {
     fn test_frequency_to_seconds_no_empty_string() {
         assert_eq!(
             Frequency("".to_string()).to_seconds(),
-            Err(ConfigError::ParseError("frequency cannot be empty".to_string()))
+            Err(ConfigError::ParseError(
+                "frequency cannot be empty".to_string()
+            ))
         );
     }
 }
