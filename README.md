@@ -115,9 +115,12 @@ be automatically loaded when the `astra` command runs.
 
 #### Standard Location For File Based On OS
 
-| Linux                                                          | Windows                                                              | macOS                                                                     |
-|----------------------------------------------------------------|----------------------------------------------------------------------|---------------------------------------------------------------------------|
-| $XDG_DATA_HOME/astra/config.json or $HOME/.config/astra/config.json | {FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\config\config.json | $HOME/Library/Application Support/dev.CharlieKarafotias.Astra/config.json |
+| OS      | Standard Location                                                          |
+|---------|----------------------------------------------------------------------------|
+| Linux   | \$XDG_DATA_HOME/astra/config.json                                          |
+|         | \$HOME/.config/astra/config.json                                           |
+| macOS   | \$HOME/Library/Application Support/dev.CharlieKarafotias.Astra/config.json |
+| Windows | {FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\config\config.json       |
 
 _Astra uses the [`directories`](https://lib.rs/crates/directories) crate for this functionality_
 
