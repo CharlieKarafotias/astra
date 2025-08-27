@@ -6,6 +6,8 @@ use directories::ProjectDirs;
 use regex::Regex;
 use serde::Deserialize;
 use serde_json;
+use std::fmt::Formatter;
+use std::ops::Add;
 use std::{
     error::Error,
     fmt::Display,
@@ -13,8 +15,6 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use std::fmt::Formatter;
-use std::ops::Add;
 
 pub struct Config {
     // From CLI options
@@ -191,10 +191,30 @@ impl<'de> Deserialize<'de> for Generators {
 pub struct Frequency(String);
 
 impl Frequency {
-    fn to_seconds(self) -> u32 {
-        todo!(
-            "Implement to seconds when adding the automatic wallpaper adjuster feature for each OS"
-        );
+    fn to_seconds(&self) -> Result<u32, ConfigError> {
+        if self.0.is_empty() {
+            return Err(ConfigError::ParseError("frequency cannot be empty".to_string()));
+        }
+        let num = self.0[..self.0.len() - 1].parse::<u32>().map_err(|_| {
+            ConfigError::ParseError("expected frequency to start with number".to_string())
+        })?;
+        let unit = self
+            .0
+            .chars()
+            .last()
+            .and_then(|c| if c.is_numeric() { None } else { Some(c) })
+            .ok_or(ConfigError::ParseError("expected frequency to end with unit denoting seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), years(y)".to_string()))?;
+
+        match unit {
+            's' => Ok(num),
+            'm' => Ok(num * 60),
+            'h' => Ok(num * 60 * 60),
+            'd' => Ok(num * 60 * 60 * 24),
+            'w' => Ok(num * 60 * 60 * 24 * 7),
+            'M' => Ok(num * 60 * 60 * 24 * 30),
+            'y' => Ok(num * 60 * 60 * 24 * 365),
+            _ => Err(ConfigError::ParseError("unrecognized frequency unit, supported units are: seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), years(y)".to_string())),
+        }
     }
 }
 
@@ -297,5 +317,74 @@ mod tests {
 
         let config = Config::read_config_file(&path).expect("file should exist");
         assert_eq!(config, UserConfig::default());
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_seconds_format() {
+        assert_eq!(Frequency("1s".to_string()).to_seconds(), Ok(1));
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_minutes_format() {
+        assert_eq!(Frequency("1m".to_string()).to_seconds(), Ok(60));
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_hours_format() {
+        assert_eq!(Frequency("2h".to_string()).to_seconds(), Ok(7200));
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_days_format() {
+        assert_eq!(Frequency("1d".to_string()).to_seconds(), Ok(86400));
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_weeks_format() {
+        assert_eq!(Frequency("1w".to_string()).to_seconds(), Ok(604800));
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_months_format() {
+        assert_eq!(Frequency("1M".to_string()).to_seconds(), Ok(2592000));
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_years_format() {
+        assert_eq!(Frequency("1y".to_string()).to_seconds(), Ok(31536000));
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_unknown_unit_format() {
+        assert_eq!(
+            Frequency("1K".to_string()).to_seconds(),
+            Err(ConfigError::ParseError("unrecognized frequency unit, supported units are: seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), years(y)".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_no_time_format() {
+        assert_eq!(
+            Frequency("d".to_string()).to_seconds(),
+            Err(ConfigError::ParseError(
+                "expected frequency to start with number".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_no_unit_format() {
+        assert_eq!(
+            Frequency("100".to_string()).to_seconds(),
+            Err(ConfigError::ParseError("expected frequency to end with unit denoting seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), years(y)".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_frequency_to_seconds_no_empty_string() {
+        assert_eq!(
+            Frequency("".to_string()).to_seconds(),
+            Err(ConfigError::ParseError("frequency cannot be empty".to_string()))
+        );
     }
 }
