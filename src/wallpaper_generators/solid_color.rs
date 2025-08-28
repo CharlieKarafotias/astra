@@ -4,8 +4,9 @@ use super::super::os_implementations::get_screen_resolution;
 use super::utils::{AstraImage, WallpaperGeneratorError};
 use clap::ValueEnum;
 use image::{ImageBuffer, Rgb};
+use serde::Deserialize;
 
-#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, ValueEnum)]
 pub enum Color {
     White,
     Black,
@@ -67,6 +68,13 @@ pub fn generate_solid_color(
     config.print_if_verbose(format!("Detected screen resolution: {}x{}", width, height).as_str());
 
     config.print_if_verbose("Generating image...");
+
+    if config.respect_user_config {
+        // TODO: if respect color theme, use this and take priority. Figure this out when picture is more clear
+        // if config.solid_gen().
+        todo!("implement respect color theme here and make it priority")
+        // TODO: otherwise logic is to check the preferred colors and custom colors and merge these to a list. Then random select and use
+    }
 
     let imgbuf = match mode {
         SolidMode::Random => ImageBuffer::from_pixel(

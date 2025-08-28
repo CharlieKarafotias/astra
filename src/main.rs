@@ -16,7 +16,7 @@ use wallpaper_generators::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let config = Config::new(cli.verbose);
+    let mut config = Config::new(cli.verbose);
 
     match cli.command {
         Some(Commands::Clean {
@@ -70,6 +70,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             generate(shell, &mut Cli::command(), "astra", &mut std::io::stdout());
         }
         None => {
+            // Since 'astra' was called, respect user config
+            config.respect_user_config = true;
             let generators = config
                 .generators()
                 .as_ref()

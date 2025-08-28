@@ -1,3 +1,5 @@
+use crate::wallpaper_generators::Color;
+
 use super::{
     cli::{Generator, SolidMode},
     constants::{APPLICATION, ORGANIZATION, QUALIFIER},
@@ -6,71 +8,42 @@ use directories::ProjectDirs;
 use regex::Regex;
 use serde::Deserialize;
 use serde_json;
-use std::fmt::Formatter;
-use std::ops::Add;
 use std::{
     error::Error,
-    fmt::Display,
+    fmt::{Display, Formatter, Write},
     fs,
-    io::Write,
+    io::Write as ioWrite,
     path::{Path, PathBuf},
 };
 
 pub struct Config {
+    // true if call to 'astra', false if specific gen called: 'astra generate solid random'
+    pub respect_user_config: bool,
     // From CLI options
     verbose: bool,
-
-    // User configurations
-    frequency: Option<Frequency>,
-    generators: Option<Generators>,
-}
-
-// TODO v1.1.0 - there are other fields users can customize. Every image type can have a mode.
-// Solid Color generator: preferred colors from defaults, Random color, list of custom colors in RGB
-// Spotlight generator: Country and locale - default is US and en-US, would be cool to allow specification
-  // looks to be [ISO_3166-1_alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#US), test to confirm
-// julia generator: custom complex numbers, custom color range, sample size for hotspots, more than just gradient for color pattern?
-// Color themes: would be nice to utilize themes across generators
-  // bing spotlight can fetch <= 4 images. grab a few and check for closest matching theme? (provide escape hatch in solid config)
-  // solid_color can generate in color range if themes defined (provide escape hatch in solid config)
-#[derive(Debug, Default, Deserialize, PartialEq)]
-struct UserConfig {
-    frequency: Option<Frequency>,
-    generators: Option<Generators>,
-}
-
-impl Display for UserConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut buf = String::new();
-        if let Some(frequency) = &self.frequency {
-            buf = buf.add(format!("frequency: {}, ", frequency.0).as_str());
-        }
-        if let Some(generators) = &self.generators {
-            buf = buf.add(format!("generators: {:?}, ", generators.0).as_str());
-        }
-        if buf.ends_with(", ") {
-            buf.truncate(buf.len() - 2);
-        }
-        write!(f, "{buf}")
-    }
+    user_config: Option<UserConfig>,
 }
 
 impl Config {
     pub fn new(verbose: bool) -> Self {
         match Config::read_config_file_if_exists(verbose) {
             Ok(user_config) => Self {
+                respect_user_config: false,
                 verbose,
-                frequency: user_config.frequency,
-                generators: user_config.generators,
+                user_config: Some(UserConfig {
+                    frequency: user_config.frequency,
+                    generators: user_config.generators,
+                    solid_gen: user_config.solid_gen,
+                }),
             },
             Err(e) => {
                 if verbose {
                     println!("WARN - ignoring configuration due to error(s): {e}");
                 }
                 Self {
+                    respect_user_config: false,
                     verbose,
-                    frequency: None,
-                    generators: None,
+                    user_config: None,
                 }
             }
         }
@@ -83,11 +56,27 @@ impl Config {
     }
 
     pub fn generators(&self) -> Option<&Generators> {
-        self.generators.as_ref()
+        if let Some(user_config) = &self.user_config {
+            user_config.generators.as_ref()
+        } else {
+            None
+        }
     }
 
     pub fn frequency(&self) -> Option<&Frequency> {
-        self.frequency.as_ref()
+        if let Some(user_config) = &self.user_config {
+            user_config.frequency.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn solid_gen(&self) -> Option<&SolidConfig> {
+        if let Some(user_config) = &self.user_config {
+            user_config.solid_gen.as_ref()
+        } else {
+            None
+        }
     }
 
     fn config_dir() -> PathBuf {
@@ -155,6 +144,66 @@ impl Config {
     }
 }
 
+// TODO v1.1.0 - there are other fields users can customize. Every image type can have a mode.
+// Solid Color generator: preferred colors from defaults, Random color, list of custom colors in RGB
+// Spotlight generator: Country and locale - default is US and en-US, would be cool to allow specification
+// looks to be [ISO_3166-1_alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#US), test to confirm
+// julia generator: custom complex numbers, custom color range, sample size for hotspots, more than just gradient for color pattern?
+// Color themes: would be nice to utilize themes across generators
+// bing spotlight can fetch <= 4 images. grab a few and check for closest matching theme? (provide escape hatch in solid config)
+// solid_color can generate in color range if themes defined (provide escape hatch in solid config)
+#[derive(Debug, Default, Deserialize, PartialEq)]
+struct UserConfig {
+    frequency: Option<Frequency>,
+    generators: Option<Generators>,
+    solid_gen: Option<SolidConfig>,
+}
+
+impl Display for UserConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut fields = vec![];
+
+        macro_rules! push_field {
+            ($field:ident) => {
+                if let Some(val) = &self.$field {
+                    fields.push(format!("{}: {}", stringify!($field), val));
+                }
+            };
+        }
+
+        push_field!(frequency);
+        push_field!(generators);
+        push_field!(solid_gen);
+
+        write!(f, "{}", fields.join(", "))
+    }
+}
+
+#[derive(Debug, Default, Deserialize, PartialEq)]
+struct SolidConfig {
+    preferred_default_colors: Option<Vec<Color>>,
+    preferred_rgb_colors: Option<Vec<(u8, u8, u8)>>,
+    // If true, ignore above fields
+    respect_color_themes: Option<bool>,
+}
+
+impl Display for SolidConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // only write if defined, else return empty string
+        let mut s = String::new();
+        if let Some(val) = &self.preferred_default_colors {
+            writeln!(&mut s, "  {:?}", val);
+        }
+        if let Some(val) = &self.preferred_rgb_colors {
+            writeln!(&mut s, "  {:?}", val);
+        }
+        if let Some(val) = &self.respect_color_themes {
+            writeln!(&mut s, "  {}", val);
+        }
+        write!(f, "{s}")
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Generators(pub Vec<Generator>);
 
@@ -166,6 +215,20 @@ impl Generators {
         },
         Generator::Spotlight,
     ];
+}
+
+impl Display for Generators {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.0
+                .iter()
+                .map(|g| g.prefix().to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )
+    }
 }
 
 impl std::ops::Deref for Generators {
@@ -225,6 +288,12 @@ impl Frequency {
             'y' => Ok(num * 60 * 60 * 24 * 365),
             _ => Err(ConfigError::ParseError("unrecognized frequency unit, supported units are: seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), years(y)".to_string())),
         }
+    }
+}
+
+impl Display for Frequency {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
