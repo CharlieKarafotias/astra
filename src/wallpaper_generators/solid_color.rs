@@ -17,7 +17,7 @@ pub fn generate_solid_color(
 
     config.print_if_verbose("Generating image...");
 
-    let mut imgbuf: AstraImage;
+    let imgbuf: AstraImage;
     if config.respect_user_config && config.solid_gen().is_some() {
         config.print_if_verbose("User config detected with solid_gen options...");
         let solid_config = config

@@ -204,13 +204,13 @@ impl Display for SolidConfig {
         // only write if defined, else return empty string
         let mut s = String::new();
         if let Some(val) = &self.preferred_default_colors {
-            writeln!(&mut s, "  {:?}", val);
+            writeln!(&mut s, "  {:?}", val)?;
         }
         if let Some(val) = &self.preferred_rgb_colors {
-            writeln!(&mut s, "  {:?}", val);
+            writeln!(&mut s, "  {:?}", val)?;
         }
         if let Some(val) = &self.respect_color_themes {
-            writeln!(&mut s, "  {}", val);
+            writeln!(&mut s, "  {}", val)?;
         }
         write!(f, "{s}")
     }

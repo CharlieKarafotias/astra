@@ -1,6 +1,5 @@
 use std::{
     error::Error,
-    ffi::OsString,
     os::{
         raw::c_void,
         windows::ffi::{OsStrExt, OsStringExt},
@@ -10,15 +9,12 @@ use std::{
 use windows::{
     Win32::{
         System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW},
-        UI::{
-            Shell::{FOLDERID_Desktop, KF_FLAG_DEFAULT, SHGetKnownFolderPath},
-            WindowsAndMessaging::{
-                GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN, SPI_SETDESKWALLPAPER, SPIF_SENDCHANGE,
-                SPIF_UPDATEINIFILE, SystemParametersInfoW,
-            },
+        UI::WindowsAndMessaging::{
+            GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN, SPI_SETDESKWALLPAPER, SPIF_SENDCHANGE,
+            SPIF_UPDATEINIFILE, SystemParametersInfoW,
         },
     },
-    core::{PCWSTR, PWSTR},
+    core::PCWSTR,
 };
 
 // --- OS specific code ---
@@ -91,7 +87,6 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
 #[derive(Debug, PartialEq)]
 pub enum WindowsError {
     DarkModeError(String),
-    DesktopPathError(String),
     UpdateDesktopError(String),
 }
 
@@ -100,9 +95,6 @@ impl std::fmt::Display for WindowsError {
         match self {
             WindowsError::DarkModeError(err) => {
                 write!(f, "Unable to determine dark mode status: {err}")
-            }
-            WindowsError::DesktopPathError(err) => {
-                write!(f, "Unable to determine desktop path: {err}")
             }
             WindowsError::UpdateDesktopError(err) => {
                 write!(f, "Unable to update desktop wallpaper: {err}")
