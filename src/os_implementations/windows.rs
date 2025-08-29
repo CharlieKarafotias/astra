@@ -2,7 +2,7 @@ use std::{
     error::Error,
     os::{
         raw::c_void,
-        windows::ffi::{OsStrExt, OsStringExt},
+        windows::ffi::OsStrExt,
     },
     path::PathBuf,
 };
