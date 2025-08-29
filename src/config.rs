@@ -180,11 +180,23 @@ impl Display for UserConfig {
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
-struct SolidConfig {
+pub struct SolidConfig {
     preferred_default_colors: Option<Vec<Color>>,
     preferred_rgb_colors: Option<Vec<(u8, u8, u8)>>,
     // If true, ignore above fields
     respect_color_themes: Option<bool>,
+}
+
+impl SolidConfig {
+    pub fn preferred_default_colors(&self) -> Option<Vec<Color>> {
+        self.preferred_default_colors.clone()
+    }
+    pub fn preferred_rgb_colors(&self) -> Option<Vec<(u8, u8, u8)>> {
+        self.preferred_rgb_colors.clone()
+    }
+    pub fn respect_color_themes(&self) -> Option<bool> {
+        self.respect_color_themes
+    }
 }
 
 impl Display for SolidConfig {
