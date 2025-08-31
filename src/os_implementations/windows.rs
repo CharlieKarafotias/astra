@@ -1,9 +1,6 @@
 use std::{
     error::Error,
-    os::{
-        raw::c_void,
-        windows::ffi::OsStrExt,
-    },
+    os::{raw::c_void, windows::ffi::OsStrExt},
     path::PathBuf,
 };
 use windows::{
