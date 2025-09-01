@@ -1,5 +1,11 @@
 use super::super::Config;
-use std::{env::var, error::Error, fmt::Display, path::PathBuf, process::Command};
+use std::{
+    env::var,
+    error::Error,
+    fmt::Display,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 // --- OS specific code ---
 /// Checks if the user's OS is currently in dark mode
@@ -100,10 +106,17 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
 pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSError> {
     let editor = var("EDITOR").unwrap_or("vim".to_string());
     config.print_if_verbose(&format!("Using editor: {}", editor));
-    Command::new(editor)
+    let status = Command::new(&editor)
         .arg(path)
-        .output()
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
         .map_err(|_| LinuxOSError::OpenEditorError)?;
+
+    if !status.success() {
+        return Err(LinuxOSError::OpenEditorError);
+    }
     Ok(())
 }
 
