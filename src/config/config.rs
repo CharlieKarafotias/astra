@@ -1,6 +1,6 @@
 use super::super::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
 use super::{
-    generators::SolidConfig,
+    generators::{JuliaConfig, SolidConfig},
     user_config::{Frequency, Generators, UserConfig},
 };
 use directories::ProjectDirs;
@@ -29,6 +29,7 @@ impl Config {
                 user_config: Some(UserConfig {
                     frequency: user_config.frequency,
                     generators: user_config.generators,
+                    julia_gen: user_config.julia_gen,
                     solid_gen: user_config.solid_gen,
                 }),
             },
@@ -70,6 +71,14 @@ impl Config {
     pub fn solid_gen(&self) -> Option<&SolidConfig> {
         if let Some(user_config) = &self.user_config {
             user_config.solid_gen.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn julia_gen(&self) -> Option<&JuliaConfig> {
+        if let Some(user_config) = &self.user_config {
+            user_config.julia_gen.as_ref()
         } else {
             None
         }

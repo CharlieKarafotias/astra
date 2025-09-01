@@ -1,24 +1,58 @@
-use super::super::config::Config;
-use super::super::os_implementations::{get_screen_resolution, is_dark_mode_active};
+use super::super::{
+    config::Config,
+    os_implementations::{get_screen_resolution, is_dark_mode_active},
+    wallpaper_generators::color_themes::ThemeSelector,
+};
 use super::utils::{AstraImage, Operator, WallpaperGeneratorError, create_color_map, scale_image};
-use crate::wallpaper_generators::color_themes::ThemeSelector;
+use crate::config::generators::julia::Appearance;
 use image::{ImageBuffer, Rgb};
 use num_complex::Complex;
 use rand::random_range;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-// TODO v1.1.0 - rename this to julia.rs as it's only julia set at the moment
+const COMPLEX_NUMS: [(f64, f64); 13] = [
+    (-0.79, 0.15),
+    (0.28, 0.008),
+    (-1.476, 0.0),
+    (-0.12, -0.77),
+    (-0.70176, -0.3842),
+    (-0.4, 0.6),
+    (0.285, 0.01),
+    (-0.835, 0.2321),
+    (-0.7269, 0.1889),
+    (0.4, 0.4),
+    (-0.162, 1.04),
+    (0.3, -0.01),
+    (0.0, 0.8),
+];
+
 pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGeneratorError> {
     config.print_if_verbose("Generating julia set...");
     let (width, height) =
         get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
     config.print_if_verbose(format!("Detected screen resolution: {}x{}", width, height).as_str());
 
-    let dark_mode =
-        is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
-    config.print_if_verbose(format!("Is dark mode active: {}", dark_mode).as_str());
+    if config.respect_user_config {
+        config.print_if_verbose("User config detected with julia_gen options...");
+    }
 
-    let theme = ThemeSelector::random();
+    let appearance: Appearance =
+        crate::respect_user_config_or_default!(config, julia_gen, appearance, {
+            Ok(Appearance::Auto)
+        })?;
+    let dark_mode: bool = match appearance {
+        Appearance::Auto => {
+            is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
+        }
+        Appearance::Light => false,
+        Appearance::Dark => true,
+    };
+
+    config.print_if_verbose(format!("Dark mode: {dark_mode}").as_str());
+
+    // TODO: v1.1.0 - implement color theme logic will need to make ThemeSelector from config
+    // let theme = crate::respect_user_config_or_default!(config, julia_gen, respect_color_themes, { ThemeSelector::random() })?;
+    let theme = ThemeSelector::random(); // TODO: remove once above is implemented
     let selected_theme = theme.selected();
     config.print_if_verbose(format!("Selected theme: {selected_theme}",).as_str());
 
@@ -27,27 +61,18 @@ pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGenera
         256,
         selected_theme.get_colors(dark_mode),
     );
+
     // Setup
-    let julia_sets = vec![
-        Complex::new(-0.79, 0.15),
-        Complex::new(0.28, 0.008),
-        Complex::new(-1.476, 0.0),
-        Complex::new(-0.12, -0.77),
-        Complex::new(-0.70176, -0.3842),
-        Complex::new(-0.4, 0.6),
-        Complex::new(0.285, 0.01),
-        Complex::new(-0.835, 0.2321),
-        Complex::new(-0.7269, 0.1889),
-        Complex::new(0.4, 0.4),
-        Complex::new(-0.162, 1.04),
-        Complex::new(0.3, -0.01),
-        Complex::new(0.0, 0.8),
-    ];
-    let selected_julia_set = julia_sets[random_range(0..julia_sets.len())];
+    let complex_numbers =
+        crate::respect_user_config_or_default!(config, julia_gen, complex_numbers, {
+            Ok(COMPLEX_NUMS.to_vec())
+        })?;
+    let (re, im) = complex_numbers[random_range(0..complex_numbers.len())];
+    let selected_julia_set = Complex::new(re, im);
     config.print_if_verbose(format!("Selected julia set: {}", selected_julia_set).as_str());
 
     // Find hotspots and randomly select one
-    let points_weights = sample_julia_set(selected_julia_set, width, height);
+    let points_weights = sample_julia_set(&config, selected_julia_set, width, height)?;
     let complex_hotspot = points_weights[random_range(0..points_weights.len())].0;
     config.print_if_verbose(format!("Selected hotspot: {}", complex_hotspot).as_str());
 
@@ -78,17 +103,26 @@ pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGenera
     Ok(imgbuf)
 }
 
-fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f64>, u32)> {
+fn sample_julia_set(
+    config: &Config,
+    c: Complex<f64>,
+    width: u32,
+    height: u32,
+) -> Result<Vec<(Complex<f64>, u32)>, WallpaperGeneratorError> {
+    // Means x iterations or more required to become a hotspot
+    let mut dynamic_threshold_for_point_to_be_selected =
+        crate::respect_user_config_or_default!(config, julia_gen, starting_sample_threshold, {
+            Ok(200u8)
+        })?;
+
     let mut points_weights = vec![];
-    let mut backoff_count = 0;
-    let backoff_max = 15;
-    // Means 200 iterations or more required to become a hotspot
-    let mut dynamic_threshold_for_point_to_be_selected = 200;
-    let threshold_decrease = 200 / backoff_max;
-    let segments = 10;
+    let mut backoff_count: u32 = 0;
+    let backoff_max: u8 = 15;
+    let threshold_decrease = dynamic_threshold_for_point_to_be_selected / backoff_max;
+    let segments: u32 = 10;
     let aspect_ratio = (width as f64 / height as f64).round() as u32;
 
-    while points_weights.is_empty() && backoff_count < backoff_max {
+    while points_weights.is_empty() && backoff_count < backoff_max as u32 {
         // Algorithm
         let num_height_segments: u32 = segments * (backoff_count + 1);
         let num_width_segments = aspect_ratio * num_height_segments;
@@ -114,7 +148,7 @@ fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f6
                     i += 1;
                 }
 
-                if i > dynamic_threshold_for_point_to_be_selected {
+                if i > dynamic_threshold_for_point_to_be_selected as u32 {
                     Some((Complex::new(cx, cy), i))
                 } else {
                     None
@@ -130,14 +164,18 @@ fn sample_julia_set(c: Complex<f64>, width: u32, height: u32) -> Vec<(Complex<f6
         dynamic_threshold_for_point_to_be_selected -= threshold_decrease;
     }
     points_weights.sort_by(|(_, w1), (_, w2)| w2.cmp(w1));
-    points_weights
+    Ok(points_weights)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::config::Config;
+
     #[test]
     fn test_sample_julia_set() {
-        let points = super::sample_julia_set(super::Complex::new(0.4, 0.4), 800, 600);
+        let points =
+            super::sample_julia_set(&Config::new(false), super::Complex::new(0.4, 0.4), 800, 600)
+                .unwrap();
         assert!(!points.is_empty());
     }
 }

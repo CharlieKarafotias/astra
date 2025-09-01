@@ -1,5 +1,5 @@
 mod config;
-mod generators;
+pub(crate) mod generators;
 mod user_config;
 
 pub use config::Config;

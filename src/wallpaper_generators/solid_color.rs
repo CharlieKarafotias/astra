@@ -9,69 +9,47 @@ pub fn generate_solid_color(
     config: &Config,
     mode: &SolidMode,
 ) -> Result<AstraImage, WallpaperGeneratorError> {
-    config.print_if_verbose("Generating solid color...");
+    config.print_if_verbose("Generating solid color image...");
 
     let (width, height) =
         get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
     config.print_if_verbose(format!("Detected screen resolution: {}x{}", width, height).as_str());
 
-    config.print_if_verbose("Generating image...");
-
-    let imgbuf: AstraImage;
-    if config.respect_user_config && config.solid_gen().is_some() {
+    if config.respect_user_config {
         config.print_if_verbose("User config detected with solid_gen options...");
-        let solid_config = config
-            .solid_gen()
-            .expect("solid_config should be some value");
+    }
+    // TODO: v1.1.0 - implement color theme logic will need to make ThemeSelector from config
+    // let theme = crate::respect_user_config_or_default!(config, solid_gen, respect_color_themes, { ThemeSelector::random() })?;
 
-        if solid_config.respect_color_themes().is_some() {
-            config.print_if_verbose("respect_color_themes set...");
-            // TODO v1.1.0 - implement color theme logic
-            todo!("implement respect color theme here and make it priority")
-            // imgbuf = generate_image(&mode, width, height);
-        } else {
-            let mut mode_options: Vec<SolidMode> = vec![];
-
-            config.print_if_verbose("reading preferred_default_colors...");
-            solid_config
-                .preferred_default_colors()
-                .iter()
-                .flatten()
-                .for_each(|color| mode_options.push(SolidMode::Color { name: *color }));
-
-            config.print_if_verbose("reading preferred_rgb_colors...");
-            solid_config
-                .preferred_rgb_colors()
-                .iter()
-                .flatten()
-                .for_each(|(r, g, b)| {
-                    mode_options.push(SolidMode::Rgb {
-                        r: *r,
-                        g: *g,
-                        b: *b,
-                    })
-                });
-
-            if mode_options.is_empty() {
-                config.print_if_verbose("read preferred_default_colors & preferred_rgb_colors config, but none were found");
-                // Use mode passed in instead since no config setup
-                imgbuf = generate_image(&mode, width, height);
-            } else {
-                config.print_if_verbose("selecting random mode based on preferred_default_colors & preferred_rgb_colors config");
-                let mut rng = rng();
-                let n = rng.random_range(..mode_options.len());
-                let rand_mode = mode_options
-                    .get(n)
-                    .expect("random selected solid mode from user config should be defined");
-                imgbuf = generate_image(rand_mode, width, height);
-            }
-        }
-    } else {
+    let mut mode_options: Vec<SolidMode> = vec![];
+    let preferred_default_colors: Vec<Color> = crate::respect_user_config_or_default!(config, solid_gen, preferred_default_colors, { Ok(vec![]) })?;
+    let preferred_rgb_colors: Vec<(u8, u8, u8)> = crate::respect_user_config_or_default!(config, solid_gen, preferred_rgb_colors, { Ok(vec![]) })?;
+    
+    preferred_default_colors.iter().for_each(|color| mode_options.push(SolidMode::Color { name: *color }));
+    preferred_rgb_colors.iter().for_each(|(r, g, b)| {
+        mode_options.push(SolidMode::Rgb {
+            r: *r,
+            g: *g,
+            b: *b,
+        })
+    });
+    
+    let imgbuf: AstraImage;
+    if mode_options.is_empty() {
+        config.print_if_verbose("read preferred_default_colors & preferred_rgb_colors config, but none were found");
+        // Use mode passed in instead since no config setup
         imgbuf = generate_image(&mode, width, height);
+    } else {
+        config.print_if_verbose("selecting random mode based on preferred_default_colors & preferred_rgb_colors config");
+        let mut rng = rng();
+        let n = rng.random_range(..mode_options.len());
+        let rand_mode = mode_options
+            .get(n)
+            .expect("random selected solid mode from user config should be defined");
+        imgbuf = generate_image(rand_mode, width, height);
     }
 
     config.print_if_verbose("Image generated!");
-
     Ok(imgbuf)
 }
 

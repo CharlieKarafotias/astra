@@ -1,14 +1,15 @@
 use super::super::cli::{Generator, SolidMode};
-use super::{config::ConfigError, generators::SolidConfig};
+use super::{
+    config::ConfigError,
+    generators::{JuliaConfig, SolidConfig},
+};
 use regex::Regex;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter};
 
 // TODO v1.1.0 - there are other fields users can customize. Every image type can have a mode.
-// Solid Color generator: preferred colors from defaults, Random color, list of custom colors in RGB
 // Spotlight generator: Country and locale - default is US and en-US, would be cool to allow specification
 // looks to be [ISO_3166-1_alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#US), test to confirm
-// julia generator: custom complex numbers, custom color range, sample size for hotspots, more than just gradient for color pattern?
 // Color themes: would be nice to utilize themes across generators
 // bing spotlight can fetch <= 4 images. grab a few and check for closest matching theme? (provide escape hatch in solid config)
 // solid_color can generate in color range if themes defined (provide escape hatch in solid config)
@@ -16,6 +17,7 @@ use std::fmt::{Display, Formatter};
 pub(super) struct UserConfig {
     pub(super) frequency: Option<Frequency>,
     pub(super) generators: Option<Generators>,
+    pub(super) julia_gen: Option<JuliaConfig>,
     pub(super) solid_gen: Option<SolidConfig>,
 }
 
@@ -33,6 +35,7 @@ impl Display for UserConfig {
 
         push_field!(frequency);
         push_field!(generators);
+        push_field!(julia_gen);
         push_field!(solid_gen);
 
         write!(f, "{}", fields.join(", "))
