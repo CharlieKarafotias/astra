@@ -1,7 +1,10 @@
+use super::super::Config;
 use std::{
+    env::var,
     error::Error,
     os::{raw::c_void, windows::ffi::OsStrExt},
     path::PathBuf,
+    process::Command,
 };
 use windows::{
     Win32::{
@@ -78,12 +81,30 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
         .map_err(|e| WindowsError::UpdateDesktopError(format!("SystemParametersInfoW failed: {e}")))
 }
 
+/// Opens the given file in the user's default editor. This function relies on the start
+/// command to open the file.
+///
+/// # Errors
+/// - Returns a `WindowsError` with the `OpenEditorError` variant if the command to open the
+/// file cannot be executed for any reason.
+pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsError> {
+    config.print_if_verbose("Using default editor");
+    Command::new("powershell")
+        .arg("-Command")
+        .arg("start")
+        .arg(path)
+        .output();
+    res.map_err(|_| WindowsError::OpenEditorError)?;
+    Ok(())
+}
+
 // --- OS specific code ---
 
 // --- Errors ---
 #[derive(Debug, PartialEq)]
 pub enum WindowsError {
     DarkModeError(String),
+    OpenEditorError,
     UpdateDesktopError(String),
 }
 
@@ -92,6 +113,9 @@ impl std::fmt::Display for WindowsError {
         match self {
             WindowsError::DarkModeError(err) => {
                 write!(f, "Unable to determine dark mode status: {err}")
+            }
+            WindowsError::OpenEditorError => {
+                write!(f, "Unable to open file in default editor")
             }
             WindowsError::UpdateDesktopError(err) => {
                 write!(f, "Unable to update desktop wallpaper: {err}")

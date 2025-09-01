@@ -8,6 +8,7 @@ use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Commands, Generator};
 use config::{Config, Generators};
+use os_implementations::open_editor;
 use rand::random_range;
 use wallpaper_generators::{
     Color, delete_wallpapers, generate_bing_spotlight, generate_julia_set, generate_solid_color,
@@ -41,16 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             config.print_if_verbose("Opening configuration file...");
             Config::create_config_file_if_not_exists(&config)?;
             if open {
-                // TODO v1.1.0 - use the os_impl mod and setup for each os instead of this
-                if let Ok(editor) = std::env::var("EDITOR") {
-                    std::process::Command::new(editor)
-                        .arg(Config::config_path())
-                        .status()
-                        .map_err(|e| {
-                            format!("failed to open configuration file: {}", e.to_string())
-                        })?;
-                }
-                // TODO v1.1.0: if not found, probably need to make a WARN here and default to showing path instead
+                open_editor(&config, Config::config_path())?;
             } else {
                 println!("{}", Config::config_path().display());
             }

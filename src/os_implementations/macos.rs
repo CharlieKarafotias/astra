@@ -1,4 +1,6 @@
-use std::{error::Error, path::PathBuf, process::Command};
+use super::super::Config;
+use std::{env::var, error::Error, path::PathBuf, process::Command};
+
 // --- OS specific code ---
 
 /// Checks if the user's OS is currently in dark mode
@@ -74,6 +76,29 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
         .arg(script)
         .output()
         .map_err(|_| MacOSError::SystemProfilerError)?;
+    Ok(())
+}
+
+/// Opens the given file in the user's default editor.
+/// This function will first check the `EDITOR` environment variable, and if it is not set,
+/// it will default to using the `open` command.
+///
+/// # Errors
+/// - Returns a `MacOSError` with the `OpenEditorError` variant if the command to open the
+/// file cannot be executed for any reason.
+pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
+    let editor = var("EDITOR").unwrap_or("open".to_string());
+    let res = match editor.as_str() {
+        "open" => {
+            config.print_if_verbose("Using default editor");
+            Command::new("open").arg("-t").arg(path).output()
+        }
+        editor => {
+            config.print_if_verbose(&format!("Using editor: {}", editor));
+            Command::new(editor).arg(path).output()
+        }
+    };
+    res.map_err(|_| MacOSError::OpenEditorError)?;
     Ok(())
 }
 
@@ -212,6 +237,7 @@ fn get_key_value_pair_based_on_spaces<'a>(
 pub enum MacOSError {
     DarkModeError,
     MainDisplayNotFound,
+    OpenEditorError,
     ResolutionNotFound,
     SystemProfilerError,
 }
@@ -221,6 +247,7 @@ impl std::fmt::Display for MacOSError {
         match self {
             MacOSError::DarkModeError => write!(f, "Unable to determine dark mode status"),
             MacOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
+            MacOSError::OpenEditorError => write!(f, "Unable to open editor"),
             MacOSError::ResolutionNotFound => {
                 write!(f, "Unable to determine resolution of main display")
             }
