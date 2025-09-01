@@ -1,6 +1,5 @@
 use super::super::Config;
 use std::{
-    env::var,
     error::Error,
     os::{raw::c_void, windows::ffi::OsStrExt},
     path::PathBuf,
@@ -93,9 +92,8 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsE
         .arg("-Command")
         .arg("start")
         .arg(path)
-        .output();
-    res.map_err(|_| WindowsError::OpenEditorError)?;
-    Ok(())
+        .output()
+        .map_err(|e| WindowsError::OpenEditorError(format!("Failed to open editor: {e}")))?
 }
 
 // --- OS specific code ---
@@ -104,7 +102,7 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsE
 #[derive(Debug, PartialEq)]
 pub enum WindowsError {
     DarkModeError(String),
-    OpenEditorError,
+    OpenEditorError(String),
     UpdateDesktopError(String),
 }
 
@@ -114,8 +112,8 @@ impl std::fmt::Display for WindowsError {
             WindowsError::DarkModeError(err) => {
                 write!(f, "Unable to determine dark mode status: {err}")
             }
-            WindowsError::OpenEditorError => {
-                write!(f, "Unable to open file in default editor")
+            WindowsError::OpenEditorError(err) => {
+                write!(f, "Unable to open file in default editor: {err}")
             }
             WindowsError::UpdateDesktopError(err) => {
                 write!(f, "Unable to update desktop wallpaper: {err}")

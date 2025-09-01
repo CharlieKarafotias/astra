@@ -100,9 +100,10 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
 pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSError> {
     let editor = var("EDITOR").unwrap_or("vim".to_string());
     config.print_if_verbose(&format!("Using editor: {}", editor));
-    Command::new(editor).arg(path).output();
-    res.map_err(|_| LinuxOSError::OpenEditorError)?;
-    Ok(())
+    Command::new(editor)
+        .arg(path)
+        .output()
+        .map_err(|_| LinuxOSError::OpenEditorError)?
 }
 
 // --- OS specific code ---
