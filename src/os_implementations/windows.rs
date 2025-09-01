@@ -93,7 +93,8 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsE
         .arg("start")
         .arg(path)
         .output()
-        .map_err(|e| WindowsError::OpenEditorError(format!("Failed to open editor: {e}")))?
+        .map_err(|e| WindowsError::OpenEditorError(format!("Failed to open editor: {e}")))?;
+    Ok(())
 }
 
 // --- OS specific code ---

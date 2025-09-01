@@ -103,7 +103,8 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSE
     Command::new(editor)
         .arg(path)
         .output()
-        .map_err(|_| LinuxOSError::OpenEditorError)?
+        .map_err(|_| LinuxOSError::OpenEditorError)?;
+    Ok(())
 }
 
 // --- OS specific code ---
