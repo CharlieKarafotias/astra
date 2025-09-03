@@ -1,6 +1,6 @@
 use super::super::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
 use super::{
-    generators::{JuliaConfig, SolidConfig},
+    generators::{JuliaConfig, SolidConfig, SpotlightConfig},
     user_config::{Frequency, Generators, UserConfig},
 };
 use directories::ProjectDirs;
@@ -31,6 +31,7 @@ impl Config {
                     generators: user_config.generators,
                     julia_gen: user_config.julia_gen,
                     solid_gen: user_config.solid_gen,
+                    spotlight_gen: user_config.spotlight_gen,
                 }),
             },
             Err(e) => {
@@ -79,6 +80,14 @@ impl Config {
     pub fn julia_gen(&self) -> Option<&JuliaConfig> {
         if let Some(user_config) = &self.user_config {
             user_config.julia_gen.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn spotlight_gen(&self) -> Option<&SpotlightConfig> {
+        if let Some(user_config) = &self.user_config {
+            user_config.spotlight_gen.as_ref()
         } else {
             None
         }

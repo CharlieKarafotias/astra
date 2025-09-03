@@ -22,10 +22,18 @@ pub fn generate_solid_color(
     // let theme = crate::respect_user_config_or_default!(config, solid_gen, respect_color_themes, { ThemeSelector::random() })?;
 
     let mut mode_options: Vec<SolidMode> = vec![];
-    let preferred_default_colors: Vec<Color> = crate::respect_user_config_or_default!(config, solid_gen, preferred_default_colors, { Ok(vec![]) })?;
-    let preferred_rgb_colors: Vec<(u8, u8, u8)> = crate::respect_user_config_or_default!(config, solid_gen, preferred_rgb_colors, { Ok(vec![]) })?;
-    
-    preferred_default_colors.iter().for_each(|color| mode_options.push(SolidMode::Color { name: *color }));
+    let preferred_default_colors: Vec<Color> =
+        crate::respect_user_config_or_default!(config, solid_gen, preferred_default_colors, {
+            Ok(vec![])
+        })?;
+    let preferred_rgb_colors: Vec<(u8, u8, u8)> =
+        crate::respect_user_config_or_default!(config, solid_gen, preferred_rgb_colors, {
+            Ok(vec![])
+        })?;
+
+    preferred_default_colors
+        .iter()
+        .for_each(|color| mode_options.push(SolidMode::Color { name: *color }));
     preferred_rgb_colors.iter().for_each(|(r, g, b)| {
         mode_options.push(SolidMode::Rgb {
             r: *r,
@@ -33,14 +41,18 @@ pub fn generate_solid_color(
             b: *b,
         })
     });
-    
+
     let imgbuf: AstraImage;
     if mode_options.is_empty() {
-        config.print_if_verbose("read preferred_default_colors & preferred_rgb_colors config, but none were found");
+        config.print_if_verbose(
+            "read preferred_default_colors & preferred_rgb_colors config, but none were found",
+        );
         // Use mode passed in instead since no config setup
         imgbuf = generate_image(&mode, width, height);
     } else {
-        config.print_if_verbose("selecting random mode based on preferred_default_colors & preferred_rgb_colors config");
+        config.print_if_verbose(
+            "selecting random mode based on preferred_default_colors & preferred_rgb_colors config",
+        );
         let mut rng = rng();
         let n = rng.random_range(..mode_options.len());
         let rand_mode = mode_options

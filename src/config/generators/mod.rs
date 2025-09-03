@@ -1,8 +1,10 @@
 pub(crate) mod julia;
 mod solid;
+mod spotlight;
 
 pub(super) use julia::JuliaConfig;
 pub(super) use solid::SolidConfig;
+pub(super) use spotlight::SpotlightConfig;
 
 #[macro_export]
 macro_rules! respect_user_config_or_default {

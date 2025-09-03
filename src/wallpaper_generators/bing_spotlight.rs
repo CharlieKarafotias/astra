@@ -29,11 +29,31 @@ use serde::Deserialize;
 /// * `ParseError`: The JSON response from the API failed to parse.
 pub fn generate_bing_spotlight(config: &Config) -> Result<AstraImage, WallpaperGeneratorError> {
     config.print_if_verbose("Generating Bing Spotlight...");
-    config.print_if_verbose("Fetching today's Bing Spotlight wallpaper...");
 
-    // Credit to Spotlight Downloader project for API reference
-    // https://github.com/ORelio/Spotlight-Downloader/blob/master/SpotlightAPI.md
-    let res = reqwest::blocking::get("https://fd.api.iris.microsoft.com/v4/api/selection?&placement=88000820&bcnt=1&country=US&locale=en-US&fmt=json")
+    if config.respect_user_config {
+        config.print_if_verbose("User config detected with spotlight_gen options...");
+    }
+
+    // TODO v1.1.0 - respect color theme here
+    // let respect_theme = crate::respect_user_config_or_default!(config, spotlight_gen, respect_color_themes, { Ok(false) })?;
+
+    // Pull out config fields and inject to URL if exist
+    let country = crate::respect_user_config_or_default!(config, spotlight_gen, country, {
+        Ok("US".to_string())
+    })?;
+    let locale = crate::respect_user_config_or_default!(config, spotlight_gen, locale, {
+        Ok("en-US".to_string())
+    })?;
+
+    // Build URL
+    let mut url = String::from(
+        "https://fd.api.iris.microsoft.com/v4/api/selection?&placement=88000820&fmt=json&bcnt=1",
+    );
+    url += format!("&country={country}").as_str();
+    url += format!("&locale={locale}").as_str();
+
+    config.print_if_verbose("Fetching today's Bing Spotlight wallpaper...");
+    let res = reqwest::blocking::get(url)
         .map_err(|e| WallpaperGeneratorError::NetworkError(e.to_string()))?
         .json::<SpotlightResponse>()
         .map_err(|e| WallpaperGeneratorError::ParseError(e.to_string()))?;
