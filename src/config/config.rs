@@ -27,6 +27,7 @@ impl Config {
                 respect_user_config: false,
                 verbose,
                 user_config: Some(UserConfig {
+                    auto_clean: user_config.auto_clean,
                     frequency: user_config.frequency,
                     generators: user_config.generators,
                     julia_gen: user_config.julia_gen,
@@ -64,6 +65,14 @@ impl Config {
     pub fn frequency(&self) -> Option<&Frequency> {
         if let Some(user_config) = &self.user_config {
             user_config.frequency.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn auto_clean(&self) -> Option<&Frequency> {
+        if let Some(user_config) = &self.user_config {
+            user_config.auto_clean.as_ref()
         } else {
             None
         }

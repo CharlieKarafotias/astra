@@ -1,3 +1,4 @@
+use super::Color;
 use crate::{
     config::Config,
     wallpaper_generators::{
@@ -5,8 +6,6 @@ use crate::{
         generate_solid_color,
     },
 };
-
-use super::Color;
 use clap::{Parser, Subcommand};
 use clap_complete::Shell;
 use std::str::FromStr;
@@ -27,8 +26,8 @@ pub enum Commands {
     /// Deletes images from "astra_wallpapers" folder (deletes all images by default)
     Clean {
         #[arg(short, long)]
-        /// Delete images older than X days
-        older_than: Option<u64>,
+        /// Delete images older than a frequency (e.g. 1s, 2m, 3h, 4d, 5w, 6m, 7y)
+        older_than: Option<String>,
         #[arg(short, long, default_value_t = false)]
         /// Deletes all images and the "astra_wallpapers" directory
         directory: bool,

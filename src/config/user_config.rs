@@ -9,7 +9,7 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
 pub(super) struct UserConfig {
-    // TODO v1.1.0 - add auto_clean feature
+    pub(super) auto_clean: Option<Frequency>,
     pub(super) frequency: Option<Frequency>,
     pub(super) generators: Option<Generators>,
     pub(super) julia_gen: Option<JuliaConfig>,
@@ -30,6 +30,7 @@ impl Display for UserConfig {
             };
         }
 
+        push_field!(auto_clean);
         push_field!(frequency);
         push_field!(generators);
         push_field!(julia_gen);
@@ -95,16 +96,16 @@ impl<'de> Deserialize<'de> for Generators {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Frequency(pub(super) String);
+pub struct Frequency(pub String);
 
 impl Frequency {
-    pub fn to_seconds(&self) -> Result<u32, ConfigError> {
+    pub fn to_seconds(&self) -> Result<u64, ConfigError> {
         if self.0.is_empty() {
             return Err(ConfigError::ParseError(
                 "frequency cannot be empty".to_string(),
             ));
         }
-        let num = self.0[..self.0.len() - 1].parse::<u32>().map_err(|_| {
+        let num = self.0[..self.0.len() - 1].parse::<u64>().map_err(|_| {
             ConfigError::ParseError("expected frequency to start with number".to_string())
         })?;
         let unit = self
@@ -139,7 +140,7 @@ impl<'de> Deserialize<'de> for Frequency {
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let re = Regex::new(r"^\d+([smdwMy])$").unwrap();
+        let re = Regex::new(r"^\d+([smhdwMy])$").unwrap();
         if re.is_match(&s) {
             Ok(Frequency(s))
         } else {

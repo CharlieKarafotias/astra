@@ -1,5 +1,5 @@
 use super::super::{
-    config::Config,
+    config::{Config, Frequency},
     constants::{APPLICATION, ORGANIZATION, QUALIFIER},
 };
 use crate::cli::Generator;
@@ -38,7 +38,7 @@ pub(super) fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorErr
 ///
 /// * `delete_all` - If true, deletes all wallpapers and the "astra_wallpapers" folder.
 /// * `delete_dir` - If true, deletes the "astra_wallpapers" folder.
-/// * `older_than_in_days` - If set, deletes wallpapers older than the specified number of days.
+/// * `older_than` - If set, deletes wallpapers older than the specified frequency.
 ///
 /// # Returns
 ///
@@ -47,7 +47,7 @@ pub fn delete_wallpapers(
     config: &Config,
     delete_all: bool,
     delete_dir: bool,
-    older_than_in_days: Option<u64>,
+    older_than: Option<&Frequency>,
 ) -> Result<(), WallpaperGeneratorError> {
     let path = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
         .map(|dirs| dirs.data_dir().join("Wallpapers"))
@@ -75,12 +75,15 @@ pub fn delete_wallpapers(
             .as_str(),
         );
     } else {
-        if let Some(days) = older_than_in_days {
+        if let Some(frequency) = older_than {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
                 .as_secs();
-            let older_than_sec = days * 24 * 60 * 60;
+            let older_than_sec = frequency
+                .to_seconds()
+                .map_err(|_| WallpaperGeneratorError::ParseError("invalid frequency, format must be a number followed by unit denotion: s, m, h, d, w, M, y (1d)".to_string()))?;
+            config.print_if_verbose(format!("Deleting images older than {}", &frequency).as_str());
             let oldest_timestamp_to_keep = now - older_than_sec;
             for entry in
                 read_dir(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?

@@ -7,7 +7,7 @@ mod wallpaper_generators;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Commands, Generator};
-use config::{Config, Generators};
+use config::{Config, Frequency, Generators};
 use os_implementations::open_editor;
 use rand::random_range;
 use wallpaper_generators::{
@@ -19,22 +19,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let mut config = Config::new(cli.verbose);
 
+    // TODO: Errors coming out in strange format. Fix this so its standardized (Error: ParseError("invalid...")) looks weird
     match cli.command {
         Some(Commands::Clean {
             older_than,
             directory,
         }) => {
-            config.print_if_verbose(
-                format!(
-                    "Deleting images older than {} days",
-                    older_than.unwrap_or(0)
-                )
-                .as_str(),
-            );
             if let Some(older_than) = older_than {
-                delete_wallpapers(&config, false, directory, Some(older_than))?;
+                let frequency = Frequency(older_than);
+                delete_wallpapers(&config, false, directory, Some(&frequency))?;
             } else {
-                // Delete all images and if directory is true, delete the "astra_wallpapers" folder
+                config.print_if_verbose("Deleting all images...");
                 delete_wallpapers(&config, true, directory, None)?;
             }
         }
@@ -66,6 +61,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => {
             // Since 'astra' was called, respect user config
             config.respect_user_config = true;
+
+            if let Some(auto_clean_frequency) = config.auto_clean() {
+                config.print_if_verbose(
+                    format!(
+                        "Auto clean enabled - cleaning images older than {}",
+                        auto_clean_frequency
+                    )
+                    .as_str(),
+                );
+                delete_wallpapers(&config, false, false, config.auto_clean())?;
+            }
+
             let generators = config
                 .generators()
                 .as_ref()
