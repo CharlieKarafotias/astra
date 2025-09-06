@@ -9,12 +9,13 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
 pub(super) struct UserConfig {
+    // TODO v1.1.0 - add auto_clean feature
     pub(super) frequency: Option<Frequency>,
     pub(super) generators: Option<Generators>,
     pub(super) julia_gen: Option<JuliaConfig>,
     pub(super) solid_gen: Option<SolidConfig>,
     pub(super) spotlight_gen: Option<SpotlightConfig>,
-    // IF New user config fields, ensure you push_field! in Display impl below
+    // IF New user config fields, ensure you push_field! in Display impl below & update readme
 }
 
 impl Display for UserConfig {
