@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             directory,
         }) => {
             if let Some(older_than) = older_than {
-                let frequency = Frequency(older_than);
+                let frequency = Frequency::new(older_than.as_str())?;
                 delete_wallpapers(&config, false, directory, Some(&frequency))?;
             } else {
                 config.print_if_verbose("Deleting all images...");

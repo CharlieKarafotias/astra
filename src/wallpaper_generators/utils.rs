@@ -80,9 +80,7 @@ pub fn delete_wallpapers(
                 .duration_since(UNIX_EPOCH)
                 .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
                 .as_secs();
-            let older_than_sec = frequency
-                .to_seconds()
-                .map_err(|_| WallpaperGeneratorError::ParseError("invalid frequency, format must be a number followed by unit denotion: s, m, h, d, w, M, y (1d)".to_string()))?;
+            let older_than_sec = frequency.to_seconds();
             config.print_if_verbose(format!("Deleting images older than {}", &frequency).as_str());
             let oldest_timestamp_to_keep = now - older_than_sec;
             for entry in

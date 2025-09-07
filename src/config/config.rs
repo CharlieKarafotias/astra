@@ -220,7 +220,7 @@ mod tests {
         fs::write(&path, r#"{ "frequency": "1w" }"#).unwrap();
 
         let config = Config::read_config_file(&path, false).expect("file should exist");
-        assert_eq!(config.frequency, Some(Frequency("1w".to_string())));
+        assert_eq!(config.frequency, Some(Frequency::new("1w").unwrap()));
         assert_eq!(config.generators, None);
     }
 
