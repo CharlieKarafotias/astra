@@ -1,6 +1,14 @@
 use super::Color;
+use crate::{
+    config::Config,
+    wallpaper_generators::{
+        AstraImage, WallpaperGeneratorError, generate_bing_spotlight, generate_julia_set,
+        generate_solid_color,
+    },
+};
 use clap::{Parser, Subcommand};
 use clap_complete::Shell;
+use std::str::FromStr;
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -18,17 +26,23 @@ pub enum Commands {
     /// Deletes images from "astra_wallpapers" folder (deletes all images by default)
     Clean {
         #[arg(short, long)]
-        /// Delete images older than X days
-        older_than: Option<u64>,
+        /// Delete images older than a frequency (e.g. 1s, 2m, 3h, 4d, 5w, 6m, 7y)
+        older_than: Option<String>,
         #[arg(short, long, default_value_t = false)]
         /// Deletes all images and the "astra_wallpapers" directory
         directory: bool,
+    },
+    /// Return path to configuration file (creates config first if it doesn't exist)
+    Config {
+        #[arg(short, long)]
+        /// Open the configuration file in the default text editor
+        open: bool,
     },
     /// Generates a new wallpaper
     Generate {
         /// The type of image to generate
         #[command(subcommand)]
-        image: ImageType,
+        image: Generator,
         #[arg(long)]
         /// Skip saving the image to the "astra_wallpapers" folder.
         no_save: bool,
@@ -41,11 +55,11 @@ pub enum Commands {
         /// The shell to generate completion scripts for
         #[arg(value_enum)]
         shell: Shell,
-    }
+    },
 }
 
-#[derive(Clone, Debug, Subcommand)]
-pub enum ImageType {
+#[derive(Clone, Debug, PartialEq, Subcommand)]
+pub enum Generator {
     /// Sets wallpaper to a randomly generated Julia Set
     Julia,
     /// Sets wallpaper to a solid color
@@ -57,7 +71,43 @@ pub enum ImageType {
     Spotlight,
 }
 
-#[derive(Clone, Debug, Subcommand)]
+impl FromStr for Generator {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "julia" => Ok(Generator::Julia),
+            "spotlight" => Ok(Generator::Spotlight),
+            "solid" => Ok(Generator::Solid {
+                mode: SolidMode::Random,
+            }),
+            _ => Err(format!("Unknown generator type: {}", s)),
+        }
+    }
+}
+
+impl Generator {
+    pub fn with_default_mode(
+        &self,
+        config: &Config,
+    ) -> Result<AstraImage, WallpaperGeneratorError> {
+        match self {
+            Generator::Julia => generate_julia_set(config),
+            Generator::Solid { mode } => generate_solid_color(config, mode),
+            Generator::Spotlight => generate_bing_spotlight(config),
+        }
+    }
+
+    pub fn prefix(&self) -> &str {
+        match self {
+            Generator::Julia => "julia",
+            Generator::Solid { mode: _ } => "solid",
+            Generator::Spotlight => "spotlight",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Subcommand)]
 pub enum SolidMode {
     /// Use a pre-defined color
     Color {
@@ -76,24 +126,4 @@ pub enum SolidMode {
         /// Blue component (0-255)
         b: u8,
     },
-}
-
-pub enum Mode {
-    Solid(SolidMode),
-}
-
-pub struct Config {
-    verbose: bool,
-}
-
-impl Config {
-    pub fn new(verbose: bool) -> Self {
-        Self { verbose }
-    }
-
-    pub fn print_if_verbose(&self, message: &str) {
-        if self.verbose {
-            println!("{}", message);
-        }
-    }
 }

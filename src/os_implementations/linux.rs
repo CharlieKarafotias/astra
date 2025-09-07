@@ -1,4 +1,11 @@
-use std::{error::Error, fmt::Display, path::PathBuf, process::Command};
+use super::super::Config;
+use std::{
+    env::var,
+    error::Error,
+    fmt::Display,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 // --- OS specific code ---
 /// Checks if the user's OS is currently in dark mode
@@ -89,21 +96,30 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
     Ok(())
 }
 
-/// Returns the path to the user's desktop folder. This relies on the `xdg-user-dir` command to
-/// determine the path.
+/// Opens the given file in the user's default editor.
+/// This function will first check the `EDITOR` environment variable, and if it is not set,
+/// it will default to using `vim`.
 ///
 /// # Errors
-///
-/// Returns a `LinuxOSError` with the `CommandError` variant if the `xdg-user-dir` command
-/// cannot be executed.
-pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, LinuxOSError> {
-    let output = Command::new("xdg-user-dir")
-        .arg("DESKTOP")
-        .output()
-        .map_err(|e| LinuxOSError::CommandError(e.to_string()))?;
-    let desktop_path = String::from_utf8_lossy(&output.stdout);
-    Ok(PathBuf::from(desktop_path.trim()))
+/// - Returns a `LinuxOSError` with the `OpenEditorError` variant if the command to open the
+/// file cannot be executed for any reason.
+pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSError> {
+    let editor = var("EDITOR").unwrap_or("vim".to_string());
+    config.print_if_verbose(&format!("Using editor: {}", editor));
+    let status = Command::new(&editor)
+        .arg(path)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .map_err(|_| LinuxOSError::OpenEditorError)?;
+
+    if !status.success() {
+        return Err(LinuxOSError::OpenEditorError);
+    }
+    Ok(())
 }
+
 // --- OS specific code ---
 
 // --- Helper functions ---
@@ -114,6 +130,7 @@ pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, LinuxOSError> {
 pub enum LinuxOSError {
     CommandError(String),
     DarkModeError(String),
+    OpenEditorError,
     ParseError(String),
     ResolutionNotFound(String),
 }
@@ -126,6 +143,9 @@ impl Display for LinuxOSError {
             }
             LinuxOSError::DarkModeError(err_msg) => {
                 write!(f, "Unable to determine dark mode status: {err_msg}")
+            }
+            LinuxOSError::OpenEditorError => {
+                write!(f, "Unable to open editor")
             }
             LinuxOSError::ParseError(err_msg) => {
                 write!(f, "Unable to parse output: {err_msg}")

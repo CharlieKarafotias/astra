@@ -106,6 +106,53 @@ astra clean
 astra --help
 ```
 
+### ⚙️ Configuration File
+
+Astra supports an optional JSON configuration file that allows you to customize
+its behavior without needing to pass flags or subcommands every time. This file
+can be placed at a standard location depending on your OS (see below) and will
+be automatically loaded when the `astra` command runs.
+
+#### Standard Location For File Based On OS
+
+| OS      | Standard Location                                                          |
+|---------|----------------------------------------------------------------------------|
+| Linux   | \$XDG_DATA_HOME/astra/config.json                                          |
+|         | \$HOME/.config/astra/config.json                                           |
+| macOS   | \$HOME/Library/Application Support/dev.CharlieKarafotias.Astra/config.json |
+| Windows | {FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\config\config.json       |
+
+_Astra uses the [`directories`](https://lib.rs/crates/directories) crate for this functionality_
+
+#### Supported Configuration Keys
+
+Use the configuration file to specify how often wallpapers should update,
+which generators to use, and more. If no configuration file exists **OR** 
+the configuration file is an empty object `{}`, the `astra` command will 
+randomly select a wallpaper generator and generate a new image.
+
+| Key                                 | Type    | Description                                                                                                                                                                                                   | Regex Format / Enum Options                                                                                                                                             | Example                       | Default Behavior If Key is Not Included                                    |
+|-------------------------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|----------------------------------------------------------------------------|
+| auto_clean                          | string  | If defined, will clean any image stored in astra's wallpaper folder older than the specified time.                                                                                                            | ^\d+[smhdwMy]$                                                                                                                                                          | 1w                            | Never runs unless user calls clean command.                                |
+| frequency                           | string  | Controls the frequency at which automatic wallpaper updates occur. Supported units are: seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), and years(y).                                         | ^\d+[smhdwMy]$                                                                                                                                                          | 1d                            | Always updates the wallpaper when astra command runs.                      |
+| generators                          | array   | List of which wallpaper generators to use when `astra` command is called.                                                                                                                                     | julia \| solid \| spotlight                                                                                                                                             | ["spotlight"]                 | All generators are available; one is chosen at random.                     |
+| julia_gen                           | object  | Controls settings used for the julia generator.                                                                                                                                                               | N/A                                                                                                                                                                     | see julia_gen.{key} below     | Generates an image with random theme and complex number.                   |
+| julia_gen.appearance                | string  | Controls if dark/light mode is preferred (Auto is system setting).                                                                                                                                            | Auto \| Light \| Dark                                                                                                                                                   | "Auto"                        | Auto (appearance set by OS)                                                |
+| julia_gen.complex_numbers           | array   | List of complex numbers to use. If multiple are provided, one will be chosen at random.                                                                                                                       | ^\[-?\d*\.\d+, -?\d*\.\d+\]$                                                                                                                                            | [[0.28, 0.008], [-0.4, 0.6]]  | Uses one of the pre-defined complex numbers provided by julia_gen.         |
+| julia_gen.starting_sample_threshold | number  | The starting color intensity required for the sampling algorithm to save a sampled point. A higher number normally results in more color variety.                                                             | A number between 0 and 255                                                                                                                                              | 200                           | 200                                                                        |
+| julia_gen.respect_color_themes      | boolean | If true, the themes defined by the user will be respected when generating a julia set.                                                                                                                        | true \| false                                                                                                                                                           | true                          | false                                                                      |
+| solid_gen                           | object  | Controls settings used for the solid generator.                                                                                                                                                               | N/A                                                                                                                                                                     | see solid_gen.{key} below     | Generates an image with a random rgb color.                                |
+| solid_gen.preferred_default_colors  | array   | List of preferred default colors. If multiple are provided, one will be chosen one at random.                                                                                                                 | [See the full list of colors here](https://github.com/CharlieKarafotias/astra/blob/5b0b318796f22fe3445ee3acca3928129c805841/src/wallpaper_generators/solid_color.rs#L8) | ["White", "Lime"]             | If neither default or rgb colors are defined, then a random color is used. |
+| solid_gen.preferred_rgb_colors      | array   | List of preferred rgb colors. If multiple are provided, one will be chosen at random.                                                                                                                         | Any three numbers between 0 and 255                                                                                                                                     | [[196, 71, 70], [0, 51, 0]]   | If neither default or rgb colors are defined, then a random color is used. |
+| solid_gen.respect_color_themes      | boolean | If true, the themes defined by the user will be respected when generating a solid color image.                                                                                                                | true \| false                                                                                                                                                           | true                          | false                                                                      |
+| spotlight_gen                       | object  | Controls settings used for the spotlight generator.                                                                                                                                                           | N/A                                                                                                                                                                     | see spotlight_gen.{key} below | Generates image using the country key `US` and the locale key `en-US`.     |
+| spotlight_gen.country               | string  | Controls which country to use as bing spotlight provides different images based on country.                                                                                                                   | [All 2-character country codes are listed in this wikipedia page](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)                                                     | "CN"                          | "US"                                                                       |
+| spotlight_gen.locale                | string  | Controls the region subtag to use (if supported by the country). From testing, this isn't always required.                                                                                                    | [language code](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes)-[country code](https://en.wikipedia.org/wiki/ISO_3166-1)                                  | "en-GB"                       | "en-US"                                                                    |
+| spotlight_gen.respect_color_themes  | boolean | If true, the themes defined by the user will attempt to be respected. The algorithm pulls 4 images and compares the average color values of each image and finds closest matching to one of the users themes. | true \| false                                                                                                                                                           | true                          | false                                                                      |
+
+💡 More keys and customization options may be added in future releases. Feel free to suggest ideas or contribute!
+
+
 ## 🤝 Contributing
 
 Contributions are welcome! Reach out to [Charlie Karafotias](https://github.com/CharlieKarafotias) for how to contribute.
@@ -116,6 +163,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
+- [Julia Set Wikipedia Page](https://en.wikipedia.org/wiki/Julia_set) for providing background information & mathematical equations
 - [ORelio's Splotlight-Downloader project](https://github.com/ORelio/Spotlight-Downloader/blob/master/SpotlightAPI.md) for the detailed Spotlight API documentation
 
 ### Developed by [Charlie Karafotias](https://github.com/CharlieKarafotias)

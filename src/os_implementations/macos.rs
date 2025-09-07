@@ -1,4 +1,6 @@
-use std::{env, error::Error, path::PathBuf, process::Command};
+use super::super::Config;
+use std::{env::var, error::Error, path::PathBuf, process::Command};
+
 // --- OS specific code ---
 
 /// Checks if the user's OS is currently in dark mode
@@ -77,17 +79,29 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
     Ok(())
 }
 
-/// Returns the path to the desktop folder on the local machine.
+/// Opens the given file in the user's default editor.
+/// This function will first check the `EDITOR` environment variable, and if it is not set,
+/// it will default to using the `open` command.
 ///
 /// # Errors
-///
-/// If the `HOME` environment variable cannot be found, this function will return an
-/// `Err` containing a `MacOSError` with the `HomeEnvVarNotFound` variant.
-pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, MacOSError> {
-    let home_dir = env::var("HOME").map_err(|_| MacOSError::HomeEnvVarNotFound)?;
-    let desktop_path = PathBuf::from(home_dir).join("Desktop");
-    Ok(desktop_path)
+/// - Returns a `MacOSError` with the `OpenEditorError` variant if the command to open the
+/// file cannot be executed for any reason.
+pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
+    let editor = var("EDITOR").unwrap_or("open".to_string());
+    let res = match editor.as_str() {
+        "open" => {
+            config.print_if_verbose("Using default editor");
+            Command::new("open").arg("-t").arg(path).output()
+        }
+        editor => {
+            config.print_if_verbose(&format!("Using editor: {}", editor));
+            Command::new(editor).arg(path).output()
+        }
+    };
+    res.map_err(|_| MacOSError::OpenEditorError)?;
+    Ok(())
 }
+
 // --- OS specific code ---
 
 // --- Helper functions ---
@@ -222,8 +236,8 @@ fn get_key_value_pair_based_on_spaces<'a>(
 #[derive(Debug, PartialEq)]
 pub enum MacOSError {
     DarkModeError,
-    HomeEnvVarNotFound,
     MainDisplayNotFound,
+    OpenEditorError,
     ResolutionNotFound,
     SystemProfilerError,
 }
@@ -232,10 +246,8 @@ impl std::fmt::Display for MacOSError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MacOSError::DarkModeError => write!(f, "Unable to determine dark mode status"),
-            MacOSError::HomeEnvVarNotFound => {
-                write!(f, "Unable to find $HOME environment variable")
-            }
             MacOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
+            MacOSError::OpenEditorError => write!(f, "Unable to open editor"),
             MacOSError::ResolutionNotFound => {
                 write!(f, "Unable to determine resolution of main display")
             }

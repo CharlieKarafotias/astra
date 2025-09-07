@@ -1,5 +1,25 @@
 # Astra Release Notes
 
+## v1.1.0
+
+### New Features
+- New configuration file (see README.md) to specify user preferences:
+  - Frequency to generate new wallpaper
+  - Preferred wallpaper generators
+### Changes
+- `astra` command functionality
+  - Running `astra` will first check for configuration file. If it exists, respect settings
+  - The `astra` command can be called on terminal startup. If user specifies frequency for wallpaper updates, will update if needed.
+  - Fallback to existing functionality when no configuration file (randomly select wallpaper generator)
+- Generated wallpapers are no longer added to the astra wallpapers folder on Desktop. Instead, find them in the following places:
+
+| OS      | Standard Location                                                         |
+|---------|---------------------------------------------------------------------------|
+| Linux   | \$XDG_DATA_HOME/astra/wallpapers                                          |
+|         | \$HOME/.local/share/astra/wallpapers                                      |
+| macOS   | \$HOME/Library/Application Support/dev.CharlieKarafotias.Astra/wallpapers |
+| Windows | {FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\data\wallpapers         |
+
 ## v1.0.3
 
 ### Bug Fix

@@ -1,37 +1,44 @@
-use super::super::cli::Config;
-use super::super::os_implementations::path_to_desktop_folder;
+use super::super::{
+    config::{Config, Frequency},
+    constants::{APPLICATION, ORGANIZATION, QUALIFIER},
+};
+use crate::cli::Generator;
+use crate::os_implementations::update_wallpaper;
+use directories::ProjectDirs;
 use image::{ImageBuffer, Rgb};
-use std::fs::{read_dir, remove_dir_all, remove_file};
 use std::{
     error::Error,
-    fs::create_dir_all,
+    fmt,
+    fs::{create_dir_all, read_dir, remove_dir_all, remove_file},
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 pub type AstraImage = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
-/// Creates a folder named "astra_wallpapers" on the desktop.
+/// Creates a folder named "wallpapers" under the data_dir folder of Astra.
+/// For each path, see: https://lib.rs/crates/directories
 ///
 /// # Returns
 ///
 /// A `Result` containing the path to the created folder on success, or a
 /// `WallpaperGeneratorError` on failure.
 pub(super) fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorError> {
-    let path = path_to_desktop_folder()
-        .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
-        .join("astra_wallpapers");
+    let proj_dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        .ok_or_else(|| WallpaperGeneratorError::OSError("could not derive data_dir".to_string()))?;
+    let path = proj_dirs.data_dir().join("Wallpapers");
     create_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
     Ok(path)
 }
 
-/// Deletes wallpapers from the "astra_wallpapers" folder.
+/// Deletes wallpapers from the "wallpapers" folder.
+/// For each path, see: https://lib.rs/crates/directories
 ///
 /// # Arguments
 ///
 /// * `delete_all` - If true, deletes all wallpapers and the "astra_wallpapers" folder.
 /// * `delete_dir` - If true, deletes the "astra_wallpapers" folder.
-/// * `older_than_in_days` - If set, deletes wallpapers older than the specified number of days.
+/// * `older_than` - If set, deletes wallpapers older than the specified frequency.
 ///
 /// # Returns
 ///
@@ -40,11 +47,13 @@ pub fn delete_wallpapers(
     config: &Config,
     delete_all: bool,
     delete_dir: bool,
-    older_than_in_days: Option<u64>,
+    older_than: Option<&Frequency>,
 ) -> Result<(), WallpaperGeneratorError> {
-    let path = path_to_desktop_folder()
-        .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
-        .join("astra_wallpapers");
+    let path = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        .map(|dirs| dirs.data_dir().join("Wallpapers"))
+        .ok_or_else(|| {
+            WallpaperGeneratorError::OSError("could not derive wallpapers path".to_string())
+        })?;
     config.print_if_verbose(format!("Deleting wallpapers from {}", path.display()).as_str());
     if delete_dir {
         remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
@@ -66,12 +75,13 @@ pub fn delete_wallpapers(
             .as_str(),
         );
     } else {
-        if let Some(days) = older_than_in_days {
+        if let Some(frequency) = older_than {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
                 .as_secs();
-            let older_than_sec = days * 24 * 60 * 60;
+            let older_than_sec = frequency.to_seconds();
+            config.print_if_verbose(format!("Deleting images older than {}", &frequency).as_str());
             let oldest_timestamp_to_keep = now - older_than_sec;
             for entry in
                 read_dir(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
@@ -104,6 +114,32 @@ pub fn delete_wallpapers(
         }
     }
 
+    Ok(())
+}
+
+pub fn handle_generate_options(
+    config: &Config,
+    image_buf: &AstraImage,
+    image: &Generator,
+    no_save: bool,
+    no_update: bool,
+) -> Result<(), Box<dyn Error>> {
+    // Handle options
+    if !no_update {
+        config.print_if_verbose(
+            "NOTE: to update wallpaper, astra must save the image to astra_wallpapers folder.",
+        );
+        // Updating requires a saved image
+        let saved_image_path = save_image(config, image, image_buf)?;
+        // TODO: move verbose logs into OS implementations of update_wallpaper
+        config.print_if_verbose("Updating wallpaper...");
+        update_wallpaper(saved_image_path)?;
+        config.print_if_verbose("Updated wallpaper");
+    }
+    // If no_update == false, we already saved the image as its required to update wallpaper
+    if no_update && !no_save {
+        let _ = save_image(&config, &image, image_buf)?;
+    }
     Ok(())
 }
 
@@ -187,7 +223,7 @@ fn mix_color(color1: [u8; 3], color2: [u8; 3], weight_color_2: f64) -> [u8; 3] {
 /// `WallpaperGeneratorError` on failure.
 pub fn save_image(
     config: &Config,
-    prefix: &str,
+    generator: &Generator,
     image: &AstraImage,
 ) -> Result<PathBuf, WallpaperGeneratorError> {
     config.print_if_verbose("Saving image to astra_wallpapers folder...");
@@ -197,11 +233,21 @@ pub fn save_image(
         .duration_since(UNIX_EPOCH)
         .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
 
-    save_path = save_path.join(format!("{prefix}_{}.png", time.as_secs().to_string()));
+    save_path = save_path.join(format!(
+        "{}_{}.png",
+        generator.prefix(),
+        time.as_secs().to_string()
+    ));
     image
         .save(&save_path)
         .map_err(|_| WallpaperGeneratorError::ImageSaveError)?;
-    config.print_if_verbose("Image saved to astra_wallpapers folder");
+    config.print_if_verbose(
+        format!(
+            "Image saved to astra_wallpapers folder: {}",
+            save_path.display()
+        )
+        .as_str(),
+    );
     Ok(save_path)
 }
 
@@ -246,22 +292,16 @@ pub(super) fn scale_image(
 // --- Errors ---
 #[derive(Debug, PartialEq)]
 pub enum WallpaperGeneratorError {
-    InvalidColorName(String),
     ImageGenerationError(String),
     ImageSaveError,
-    InvalidMode(String),
     NetworkError(String),
-    NoModeProvided(String),
     OSError(String),
     ParseError(String),
 }
 
-impl std::fmt::Display for WallpaperGeneratorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for WallpaperGeneratorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WallpaperGeneratorError::InvalidColorName(name) => {
-                write!(f, "Invalid color name: {}", name)
-            }
             WallpaperGeneratorError::ImageGenerationError(msg) => {
                 write!(f, "Image Generation Error: {}", msg)
             }
@@ -276,12 +316,6 @@ impl std::fmt::Display for WallpaperGeneratorError {
             }
             WallpaperGeneratorError::ParseError(msg) => {
                 write!(f, "Parse Error: {}", msg)
-            }
-            WallpaperGeneratorError::NoModeProvided(msg) => {
-                write!(f, "No mode provided: {}", msg)
-            }
-            WallpaperGeneratorError::InvalidMode(msg) => {
-                write!(f, "Invalid mode provided, expected mode {}", msg)
             }
         }
     }

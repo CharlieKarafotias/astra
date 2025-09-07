@@ -1,24 +1,19 @@
+use super::super::Config;
 use std::{
     error::Error,
-    ffi::OsString,
-    os::{
-        raw::c_void,
-        windows::ffi::{OsStrExt, OsStringExt},
-    },
+    os::{raw::c_void, windows::ffi::OsStrExt},
     path::PathBuf,
+    process::Command,
 };
 use windows::{
     Win32::{
         System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW},
-        UI::{
-            Shell::{FOLDERID_Desktop, KF_FLAG_DEFAULT, SHGetKnownFolderPath},
-            WindowsAndMessaging::{
-                GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN, SPI_SETDESKWALLPAPER, SPIF_SENDCHANGE,
-                SPIF_UPDATEINIFILE, SystemParametersInfoW,
-            },
+        UI::WindowsAndMessaging::{
+            GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN, SPI_SETDESKWALLPAPER, SPIF_SENDCHANGE,
+            SPIF_UPDATEINIFILE, SystemParametersInfoW,
         },
     },
-    core::{PCWSTR, PWSTR},
+    core::PCWSTR,
 };
 
 // --- OS specific code ---
@@ -85,22 +80,21 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
         .map_err(|e| WindowsError::UpdateDesktopError(format!("SystemParametersInfoW failed: {e}")))
 }
 
-/// Returns the path to the desktop folder on the local machine.
+/// Opens the given file in the user's default editor. This function relies on the start
+/// command to open the file.
 ///
 /// # Errors
-///
-/// If the `powershell` command cannot be executed for any reason, this function will return an
-/// `Err` containing a `WindowsError` with the `DesktopPathError` variant.
-pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, WindowsError> {
-    let raw_path: PWSTR;
-    let os_str: OsString;
-    unsafe {
-        raw_path = SHGetKnownFolderPath(&FOLDERID_Desktop, KF_FLAG_DEFAULT, None).map_err(|e| {
-            WindowsError::DesktopPathError(format!("SHGetKnownFolderPath failed: {e}"))
-        })?;
-        os_str = OsString::from_wide(raw_path.as_wide());
-    }
-    Ok(PathBuf::from(os_str))
+/// - Returns a `WindowsError` with the `OpenEditorError` variant if the command to open the
+/// file cannot be executed for any reason.
+pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsError> {
+    config.print_if_verbose("Using default editor");
+    Command::new("powershell")
+        .arg("-Command")
+        .arg("start")
+        .arg(path)
+        .output()
+        .map_err(|e| WindowsError::OpenEditorError(format!("Failed to open editor: {e}")))?;
+    Ok(())
 }
 
 // --- OS specific code ---
@@ -109,7 +103,7 @@ pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, WindowsError> {
 #[derive(Debug, PartialEq)]
 pub enum WindowsError {
     DarkModeError(String),
-    DesktopPathError(String),
+    OpenEditorError(String),
     UpdateDesktopError(String),
 }
 
@@ -119,8 +113,8 @@ impl std::fmt::Display for WindowsError {
             WindowsError::DarkModeError(err) => {
                 write!(f, "Unable to determine dark mode status: {err}")
             }
-            WindowsError::DesktopPathError(err) => {
-                write!(f, "Unable to determine desktop path: {err}")
+            WindowsError::OpenEditorError(err) => {
+                write!(f, "Unable to open file in default editor: {err}")
             }
             WindowsError::UpdateDesktopError(err) => {
                 write!(f, "Unable to update desktop wallpaper: {err}")
