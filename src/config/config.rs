@@ -1,7 +1,8 @@
 use super::super::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
 use super::{
-    generators::{JuliaConfig, SolidConfig, SpotlightConfig},
-    user_config::{Frequency, Generators, UserConfig},
+    frequency::Frequency,
+    generators::{Generators, JuliaConfig, SolidConfig, SpotlightConfig},
+    user_config::UserConfig,
 };
 use directories::ProjectDirs;
 use std::{
