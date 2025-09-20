@@ -1,6 +1,7 @@
 use super::{
     frequency::Frequency,
     generators::{Generators, JuliaConfig, SolidConfig, SpotlightConfig},
+    theme::ThemeConfigs,
 };
 use serde::Deserialize;
 use std::cmp::PartialEq;
@@ -14,6 +15,7 @@ pub(super) struct UserConfig {
     pub(super) julia_gen: Option<JuliaConfig>,
     pub(super) solid_gen: Option<SolidConfig>,
     pub(super) spotlight_gen: Option<SpotlightConfig>,
+    pub(super) themes: Option<ThemeConfigs>,
     // IF New user config fields, ensure you push_field! in Display impl below & update readme
 }
 
@@ -35,7 +37,15 @@ impl Display for UserConfig {
         push_field!(julia_gen);
         push_field!(solid_gen);
         push_field!(spotlight_gen);
+        push_field!(themes);
 
-        write!(f, "{}", fields.join(", "))
+        for (index, field) in fields.iter().enumerate() {
+            if index == fields.len() - 1 {
+                write!(f, "  {}", field)?;
+            } else {
+                writeln!(f, "  {}", field)?;
+            }
+        }
+        Ok(())
     }
 }

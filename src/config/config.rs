@@ -2,6 +2,7 @@ use super::super::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
 use super::{
     frequency::Frequency,
     generators::{Generators, JuliaConfig, SolidConfig, SpotlightConfig},
+    theme::ThemeConfigs,
     user_config::UserConfig,
 };
 use directories::ProjectDirs;
@@ -34,6 +35,7 @@ impl Config {
                     julia_gen: user_config.julia_gen,
                     solid_gen: user_config.solid_gen,
                     spotlight_gen: user_config.spotlight_gen,
+                    themes: user_config.themes,
                 }),
             },
             Err(e) => {
@@ -103,6 +105,14 @@ impl Config {
         }
     }
 
+    pub fn themes(&self) -> Option<&ThemeConfigs> {
+        if let Some(user_config) = &self.user_config {
+            user_config.themes.as_ref()
+        } else {
+            None
+        }
+    }
+
     fn config_dir() -> PathBuf {
         ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
             .map(|dirs| dirs.config_dir().to_path_buf())
@@ -147,7 +157,8 @@ impl Config {
             }
             let config = Self::read_config_file(&config_path, verbose)?;
             if verbose {
-                println!("configuration loaded - {config}");
+                println!("configuration loaded:");
+                println!("{config}");
             }
             Ok(config)
         } else {

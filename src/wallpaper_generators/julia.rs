@@ -50,9 +50,23 @@ pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGenera
 
     config.print_if_verbose(format!("Dark mode: {dark_mode}").as_str());
 
-    // TODO: v1.1.0 - implement color theme logic will need to make ThemeSelector from config
-    // let theme = crate::respect_user_config_or_default!(config, julia_gen, respect_color_themes, { ThemeSelector::random() })?;
-    let theme = ThemeSelector::random(); // TODO: remove once above is implemented
+    let should_respect_color_themes =
+        crate::respect_user_config_or_default!(config, julia_gen, respect_color_themes, {
+            Ok(false)
+        })?;
+    let theme = if !should_respect_color_themes || config.themes().is_none() {
+        ThemeSelector::random()
+    } else {
+        config.print_if_verbose(
+            "Respecting color themes - choosing a user defined theme at random...",
+        );
+        config
+            .themes()
+            .expect("themes should be some")
+            .random()
+            .to_theme_selector()
+    };
+
     let selected_theme = theme.selected();
     config.print_if_verbose(format!("Selected theme: {selected_theme}",).as_str());
 

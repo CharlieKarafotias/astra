@@ -30,16 +30,17 @@ impl Display for SolidConfig {
         // only write if defined, else return empty string
         let mut s = String::new();
         if let Some(val) = &self.preferred_default_colors {
-            writeln!(&mut s, "  preferred_default_colors: {:?}", val)?;
+            writeln!(&mut s, "    preferred_default_colors: {:?}", val)?;
         }
         if let Some(val) = &self.preferred_rgb_colors {
-            writeln!(&mut s, "  preferred_rgb_colors: {:?}", val)?;
+            writeln!(&mut s, "    preferred_rgb_colors: {:?}", val)?;
         }
         if let Some(val) = &self.respect_color_themes {
-            writeln!(&mut s, "  respect_color_themes: {}", val)?;
+            writeln!(&mut s, "    respect_color_themes: {}", val)?;
         }
         if s.len() != 0 {
             writeln!(f, "")?;
+            s.pop(); // remove last newline character
         }
         write!(f, "{s}")
     }
