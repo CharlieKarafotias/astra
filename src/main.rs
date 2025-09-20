@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod constants;
 mod os_implementations;
+mod themes;
 mod wallpaper_generators;
 
 use clap::{CommandFactory, Parser};

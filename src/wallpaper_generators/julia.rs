@@ -1,7 +1,7 @@
 use super::super::{
     config::Config,
     os_implementations::{get_screen_resolution, is_dark_mode_active},
-    wallpaper_generators::color_themes::ThemeSelector,
+    themes::ThemeSelector,
 };
 use super::utils::{AstraImage, Operator, WallpaperGeneratorError, create_color_map, scale_image};
 use crate::config::generators::julia::Appearance;

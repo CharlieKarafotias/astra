@@ -1,5 +1,4 @@
 mod bing_spotlight;
-mod color_themes;
 mod julia;
 mod solid_color;
 mod utils;
