@@ -1,5 +1,8 @@
 use super::super::{cli::SolidMode, config::Config, os_implementations::get_screen_resolution};
 use super::utils::{AstraImage, WallpaperGeneratorError};
+use crate::config::generators::julia::Appearance;
+use crate::os_implementations::is_dark_mode_active;
+use crate::themes::{ColorTheme, ThemeSelector};
 use clap::ValueEnum;
 use image::{ImageBuffer, Rgb};
 use rand::{Rng, rng};
@@ -17,9 +20,33 @@ pub fn generate_solid_color(
 
     if config.respect_user_config {
         config.print_if_verbose("User config detected with solid_gen options...");
+
+        // Current setup will always prefer user_theme to config setup, need to decide if this is desired behavior
+        let should_respect_color_themes =
+            crate::respect_user_config_or_default!(config, solid_gen, respect_color_themes, {
+                Ok(false)
+            })?;
+        let theme = match (should_respect_color_themes, config.themes()) {
+            (true, Some(themes)) => themes.random().to_theme_selector(),
+            (true, None) | (false, _) => ThemeSelector::random(),
+        };
+        let selected_theme = theme.selected();
+        let appearance: Appearance =
+            crate::respect_user_config_or_default!(config, julia_gen, appearance, {
+                Ok(Appearance::Auto)
+            })?;
+        let dark_mode: bool = match appearance {
+            Appearance::Auto => is_dark_mode_active()
+                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?,
+            Appearance::Light => false,
+            Appearance::Dark => true,
+        };
+        config.print_if_verbose(format!("Selected theme: {selected_theme}",).as_str());
+        let [r, g, b] = selected_theme.average_color(dark_mode);
+        let imgbuf = generate_image(&SolidMode::Rgb { r, g, b }, width, height);
+        config.print_if_verbose("Image generated!");
+        return Ok(imgbuf);
     }
-    // TODO: v1.1.0 - implement color theme logic will need to make ThemeSelector from config
-    // let theme = crate::respect_user_config_or_default!(config, solid_gen, respect_color_themes, { ThemeSelector::random() })?;
 
     let mut mode_options: Vec<SolidMode> = vec![];
     let preferred_default_colors: Vec<Color> =

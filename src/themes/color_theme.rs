@@ -48,9 +48,12 @@ impl ColorTheme {
         let colors = self.get_colors(dark_mode);
         let mut rgb_avg = (0.0, 0.0, 0.0);
         colors.iter().for_each(|color| {
-            rgb_avg.0 += color[0].pow(2) as f64;
-            rgb_avg.1 += color[1].pow(2) as f64;
-            rgb_avg.2 += color[2].pow(2) as f64;
+            let r = color[0] as f64;
+            let g = color[1] as f64;
+            let b = color[2] as f64;
+            rgb_avg.0 += r.powi(2);
+            rgb_avg.1 += g.powi(2);
+            rgb_avg.2 += b.powi(2);
         });
         [
             (rgb_avg.0 / colors.len() as f64).sqrt() as u8,
