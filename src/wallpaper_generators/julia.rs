@@ -54,19 +54,10 @@ pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGenera
         crate::respect_user_config_or_default!(config, julia_gen, respect_color_themes, {
             Ok(false)
         })?;
-    let theme = if !should_respect_color_themes || config.themes().is_none() {
-        ThemeSelector::random()
-    } else {
-        config.print_if_verbose(
-            "Respecting color themes - choosing a user defined theme at random...",
-        );
-        config
-            .themes()
-            .expect("themes should be some")
-            .random()
-            .to_theme_selector()
+    let theme = match (should_respect_color_themes, config.themes()) {
+        (true, Some(themes)) => themes.random().to_theme_selector(),
+        (true, None) | (false, _) => ThemeSelector::random(),
     };
-
     let selected_theme = theme.selected();
     config.print_if_verbose(format!("Selected theme: {selected_theme}",).as_str());
 
