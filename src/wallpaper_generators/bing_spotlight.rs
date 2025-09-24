@@ -34,9 +34,6 @@ pub fn generate_bing_spotlight(config: &Config) -> Result<AstraImage, WallpaperG
         config.print_if_verbose("User config detected with spotlight_gen options...");
     }
 
-    // TODO v1.1.0 - respect color theme here
-    // let respect_theme = crate::respect_user_config_or_default!(config, spotlight_gen, respect_color_themes, { Ok(false) })?;
-
     // Pull out config fields and inject to URL if exist
     let country = crate::respect_user_config_or_default!(config, spotlight_gen, country, {
         Ok("US".to_string())
@@ -45,43 +42,102 @@ pub fn generate_bing_spotlight(config: &Config) -> Result<AstraImage, WallpaperG
         Ok("en-US".to_string())
     })?;
 
-    // Build URL
-    let mut url = String::from(
-        "https://fd.api.iris.microsoft.com/v4/api/selection?&placement=88000820&fmt=json&bcnt=1",
-    );
-    url += format!("&country={country}").as_str();
-    url += format!("&locale={locale}").as_str();
+    // Pull 2-4 images and find one that matches the closest to the average color of the theme
+    let respect_theme =
+        crate::respect_user_config_or_default!(config, spotlight_gen, respect_color_themes, {
+            Ok(false)
+        })?;
 
-    config.print_if_verbose("Fetching today's Bing Spotlight wallpaper...");
-    let res = reqwest::blocking::get(url)
-        .map_err(|e| WallpaperGeneratorError::NetworkError(e.to_string()))?
-        .json::<SpotlightResponse>()
-        .map_err(|e| WallpaperGeneratorError::ParseError(e.to_string()))?;
+    let download_links = get_image_download_urls(
+        &config,
+        APIParams {
+            // TODO: v1.1.0 - this could be 2-4, maybe count could be config option as 4 could be slow due to blocking calls
+            count: if respect_theme { 2 } else { 1 },
+            country: &country,
+            locale: &locale,
+        },
+    )?;
 
-    if res.batchrsp.items.len() == 0 {
-        return Err(WallpaperGeneratorError::ImageGenerationError(
-            "No images found in response".to_string(),
-        ));
+    let mut selected_image = Vec::new();
+    for download_link in download_links {
+        let image = download_image_to_memory(&config, &download_link)?;
+        // TODO: v1.1.0 - implement respect_color_themes by comparing average color of image to themes available
+        // From here, choose the best image matching any of the user_config themes
+        // If no good images are found then just return the first image
+
+        // TODO: remove me after implementing above, doing this for commit
+        selected_image = image;
+        break;
     }
-    config.print_if_verbose("Received response with image URL");
 
-    let image_info: ImageInfo = serde_json::from_str(&res.batchrsp.items[0].item)
-        .map_err(|e| WallpaperGeneratorError::ParseError(e.to_string()))?;
-    let image_url = image_info.ad.landscape_image.asset;
+    let loaded_image = image::load_from_memory(selected_image.as_slice())
+        .map_err(|e| WallpaperGeneratorError::ImageGenerationError(e.to_string()))?;
 
-    config.print_if_verbose("Downloading image...");
+    Ok(loaded_image.to_rgb8())
+}
 
-    let image = reqwest::blocking::get(image_url)
+fn download_image_to_memory(
+    config: &Config,
+    url: &str,
+) -> Result<Vec<u8>, WallpaperGeneratorError> {
+    config.print_if_verbose(format!("Downloading image from {}", url).as_str());
+    let image = reqwest::blocking::get(url)
         .map_err(|e| WallpaperGeneratorError::NetworkError(e.to_string()))?
         .bytes()
         .map_err(|e| WallpaperGeneratorError::NetworkError(e.to_string()))?
         .to_vec();
     config.print_if_verbose("Image downloaded successfully");
+    Ok(image)
+}
 
-    let loaded_image = image::load_from_memory(&image)
-        .map_err(|e| WallpaperGeneratorError::ImageGenerationError(e.to_string()))?;
+// TODO: v1.1.0 - add func comments
+fn get_image_download_urls(
+    config: &Config,
+    params: APIParams,
+) -> Result<Vec<String>, WallpaperGeneratorError> {
+    let url = build_url(params);
+    config.print_if_verbose("Fetching download URLs for spotlight wallpaper(s)...");
+    let res = reqwest::blocking::get(url)
+        .map_err(|e| WallpaperGeneratorError::NetworkError(e.to_string()))?
+        .json::<SpotlightResponse>()
+        .map_err(|e| WallpaperGeneratorError::ParseError(e.to_string()))?;
+    if res.batchrsp.items.len() == 0 {
+        return Err(WallpaperGeneratorError::ImageGenerationError(
+            "No download URLs found in response".to_string(),
+        ));
+    }
+    config.print_if_verbose(
+        format!(
+            "Received response with {} image download URLs",
+            res.batchrsp.items.len()
+        )
+        .as_str(),
+    );
 
-    Ok(loaded_image.to_rgb8())
+    let mut urls: Vec<String> = Vec::new();
+    for element in res.batchrsp.items {
+        let image_info: ImageInfo = serde_json::from_str(&element.item)
+            .map_err(|e| WallpaperGeneratorError::ParseError(e.to_string()))?;
+        urls.push(image_info.ad.landscape_image.asset);
+    }
+    Ok(urls)
+}
+
+// TODO: v1.1.0 - add func comments
+// TODO: v1.1.0 - add tests
+fn build_url(params: APIParams) -> String {
+    format!(
+        "https://fd.api.iris.microsoft.com/v4/api/selection?&placement=88000820&fmt=json&bcnt={count}&country={country}&locale={locale}",
+        count = params.count,
+        country = params.country,
+        locale = params.locale,
+    )
+}
+
+struct APIParams<'a> {
+    count: u8,
+    country: &'a str,
+    locale: &'a str,
 }
 
 // Request and response structs
