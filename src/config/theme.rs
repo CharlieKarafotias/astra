@@ -61,6 +61,10 @@ impl ThemeConfigs {
     pub fn random(&self) -> &ThemeConfig {
         self.0.choose(&mut rand::rng()).expect("Failed to choose random theme because ThemeConfigs was empty - this should never happen")
     }
+
+    pub fn themes(&self) -> &Vec<ThemeConfig> {
+        &self.0
+    }
 }
 
 impl Display for ThemeConfigs {

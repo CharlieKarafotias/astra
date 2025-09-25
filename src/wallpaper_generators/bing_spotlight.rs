@@ -48,32 +48,60 @@ pub fn generate_bing_spotlight(config: &Config) -> Result<AstraImage, WallpaperG
             Ok(false)
         })?;
 
+    // Check if user has defined color themes
+    let has_user_defined_color_themes = config.themes().is_some()
+        && config
+            .themes()
+            .expect("Failed to get themes")
+            .themes()
+            .len()
+            > 0;
+
     let download_links = get_image_download_urls(
         &config,
         APIParams {
             // TODO: v1.1.0 - this could be 2-4, maybe count could be config option as 4 could be slow due to blocking calls
-            count: if respect_theme { 2 } else { 1 },
+            count: if respect_theme && has_user_defined_color_themes {
+                2
+            } else {
+                1
+            },
             country: &country,
             locale: &locale,
         },
     )?;
 
-    let mut selected_image = Vec::new();
-    for download_link in download_links {
-        let image = download_image_to_memory(&config, &download_link)?;
-        // TODO: v1.1.0 - implement respect_color_themes by comparing average color of image to themes available
-        // From here, choose the best image matching any of the user_config themes
-        // If no good images are found then just return the first image
+    let selected_image: AstraImage = if respect_theme && has_user_defined_color_themes {
+        // Loop through each download URL
+        // download image
+        // Convert to AstraImage
+        // Compare AstraImage to user themes to find the closest theme for curr image
+        // return the image closest to one of the user themes
+        for link in download_links {
+            let downloaded_img = download_image_to_memory(&config, &link)?;
+            let loaded_img: AstraImage = image::load_from_memory(downloaded_img.as_slice())
+                .map_err(|e| WallpaperGeneratorError::ImageGenerationError(e.to_string()))?
+                .to_rgb8();
+            // Function that tells us how far off the average color of the image is from the average color of a theme
+            let distance_from_closest_theme = compare_image_to_user_theme(&config, &loaded_img);
+        }
+        todo!("v1.1.0 - implement me")
+    } else {
+        let downloaded_img = download_image_to_memory(&config, &download_links[0])?;
+        image::load_from_memory(downloaded_img.as_slice())
+            .map_err(|e| WallpaperGeneratorError::ImageGenerationError(e.to_string()))?
+            .to_rgb8()
+    };
 
-        // TODO: remove me after implementing above, doing this for commit
-        selected_image = image;
-        break;
-    }
+    Ok(selected_image)
+}
 
-    let loaded_image = image::load_from_memory(selected_image.as_slice())
-        .map_err(|e| WallpaperGeneratorError::ImageGenerationError(e.to_string()))?;
-
-    Ok(loaded_image.to_rgb8())
+/// Compares the average color of an image to the average colors of each user theme.
+/// Returns an integer where the lower the number is the better. The best possible match is 0.
+fn compare_image_to_user_theme(config: &Config, image: &AstraImage) -> u32 {
+    todo!(
+        "v1.1.0 - implement me. Should find way to calculate all user themes averages once and pass ref into this. Also sum the r,g,b distances from the average colors to get a single value to compare."
+    )
 }
 
 fn download_image_to_memory(
