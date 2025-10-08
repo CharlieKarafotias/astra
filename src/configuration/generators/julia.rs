@@ -53,8 +53,8 @@ impl Display for JuliaConfig {
         if let Some(val) = &self.respect_color_themes {
             writeln!(&mut s, "    respect_color_themes: {:?}", val)?;
         }
-        if s.len() != 0 {
-            writeln!(f, "")?;
+        if !s.is_empty() {
+            writeln!(f)?;
             s.pop(); // remove last newline character
         }
         write!(f, "{s}")

@@ -1,8 +1,10 @@
-use super::super::{cli::SolidMode, config::Config, os_implementations::get_screen_resolution};
+use super::super::{
+    cli::SolidMode, configuration::Config, os_implementations::get_screen_resolution,
+};
 use super::utils::{AstraImage, WallpaperGeneratorError};
-use crate::config::generators::julia::Appearance;
+use crate::configuration::generators::julia::Appearance;
 use crate::os_implementations::is_dark_mode_active;
-use crate::themes::{ColorTheme, ThemeSelector};
+use crate::themes::ThemeSelector;
 use clap::ValueEnum;
 use image::{ImageBuffer, Rgb};
 use rand::{Rng, rng};
@@ -15,7 +17,7 @@ pub fn generate_solid_color(
     config.print_if_verbose("Generating solid color image...");
 
     let (width, height) =
-        get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        get_screen_resolution().map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
     config.print_if_verbose(format!("Detected screen resolution: {}x{}", width, height).as_str());
 
     if config.respect_user_config {
@@ -36,13 +38,16 @@ pub fn generate_solid_color(
                 Ok(Appearance::Auto)
             })?;
         let dark_mode: bool = match appearance {
-            Appearance::Auto => is_dark_mode_active()
-                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?,
+            Appearance::Auto => {
+                is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?
+            }
             Appearance::Light => false,
             Appearance::Dark => true,
         };
         config.print_if_verbose(format!("Selected theme: {selected_theme}",).as_str());
-        let [r, g, b] = selected_theme.average_color(dark_mode);
+        let [r, g, b] = selected_theme
+            .average_color(dark_mode)
+            .map_err(|e| WallpaperGeneratorError::ImageGeneration(e.to_string()))?;
         let imgbuf = generate_image(&SolidMode::Rgb { r, g, b }, width, height);
         config.print_if_verbose("Image generated!");
         return Ok(imgbuf);
@@ -69,13 +74,12 @@ pub fn generate_solid_color(
         })
     });
 
-    let imgbuf: AstraImage;
-    if mode_options.is_empty() {
+    let imgbuf: AstraImage = if mode_options.is_empty() {
         config.print_if_verbose(
             "read preferred_default_colors & preferred_rgb_colors config, but none were found",
         );
         // Use mode passed in instead since no config setup
-        imgbuf = generate_image(&mode, width, height);
+        generate_image(mode, width, height)
     } else {
         config.print_if_verbose(
             "selecting random mode based on preferred_default_colors & preferred_rgb_colors config",
@@ -85,8 +89,8 @@ pub fn generate_solid_color(
         let rand_mode = mode_options
             .get(n)
             .expect("random selected solid mode from user config should be defined");
-        imgbuf = generate_image(rand_mode, width, height);
-    }
+        generate_image(rand_mode, width, height)
+    };
 
     config.print_if_verbose("Image generated!");
     Ok(imgbuf)
@@ -103,9 +107,7 @@ fn generate_image(mode: &SolidMode, width: u32, height: u32) -> AstraImage {
                 rand::random::<u8>(),
             ]),
         ),
-        SolidMode::Rgb { r, g, b } => {
-            ImageBuffer::from_pixel(width, height, Rgb([r.clone(), g.clone(), b.clone()]))
-        }
+        SolidMode::Rgb { r, g, b } => ImageBuffer::from_pixel(width, height, Rgb([*r, *g, *b])),
         SolidMode::Color { name } => {
             let (r, g, b) = name.rgb();
             ImageBuffer::from_pixel(width, height, Rgb([r, g, b]))

@@ -10,7 +10,8 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Default, Deserialize, PartialEq)]
 pub(super) struct UserConfig {
     pub(super) auto_clean: Option<Frequency>,
-    pub(super) frequency: Option<Frequency>,
+    // TODO v1.2.0: add frequency back in to control how often wallpaper changes
+    // pub(super) frequency: Option<Frequency>,
     pub(super) generators: Option<Generators>,
     pub(super) julia_gen: Option<JuliaConfig>,
     pub(super) solid_gen: Option<SolidConfig>,
@@ -32,7 +33,8 @@ impl Display for UserConfig {
         }
 
         push_field!(auto_clean);
-        push_field!(frequency);
+        // TODO v1.2.0: add frequency back in to control how often wallpaper changes
+        // push_field!(frequency);
         push_field!(generators);
         push_field!(julia_gen);
         push_field!(solid_gen);

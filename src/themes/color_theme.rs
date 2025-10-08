@@ -1,4 +1,5 @@
-use std::fmt::Display;
+use super::super::wallpaper_generators::{AstraImage, average_color as avg_color};
+use std::fmt::{self, Display};
 
 pub struct ColorTheme {
     name: String,
@@ -44,22 +45,17 @@ impl ColorTheme {
     /// # Returns
     ///
     /// The average color of the theme.
-    pub fn average_color(&self, dark_mode: bool) -> [u8; 3] {
+    pub fn average_color(&self, dark_mode: bool) -> Result<[u8; 3], ColorThemeError> {
         let colors = self.get_colors(dark_mode);
-        let mut rgb_avg = (0.0, 0.0, 0.0);
-        colors.iter().for_each(|color| {
-            let r = color[0] as f64;
-            let g = color[1] as f64;
-            let b = color[2] as f64;
-            rgb_avg.0 += r.powi(2);
-            rgb_avg.1 += g.powi(2);
-            rgb_avg.2 += b.powi(2);
-        });
-        [
-            (rgb_avg.0 / colors.len() as f64).sqrt() as u8,
-            (rgb_avg.1 / colors.len() as f64).sqrt() as u8,
-            (rgb_avg.2 / colors.len() as f64).sqrt() as u8,
-        ]
+        let astra_image: AstraImage = AstraImage::from_raw(
+            colors.len() as u32,
+            1,
+            colors.iter().flatten().copied().collect(),
+        )
+        .ok_or(ColorThemeError::ImageGeneration(
+            "Failed to create AstraImage".to_string(),
+        ))?;
+        Ok(avg_color(&astra_image).0)
     }
 }
 
@@ -72,5 +68,18 @@ impl Display for ColorTheme {
             self.supports_dark_mode,
             self.colors.len()
         )
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ColorThemeError {
+    ImageGeneration(String),
+}
+
+impl fmt::Display for ColorThemeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ColorThemeError::ImageGeneration(msg) => write!(f, "Image generation error: {}", msg),
+        }
     }
 }

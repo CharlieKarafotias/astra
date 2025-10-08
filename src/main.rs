@@ -1,5 +1,5 @@
 mod cli;
-mod config;
+mod configuration;
 mod constants;
 mod os_implementations;
 mod themes;
@@ -8,7 +8,7 @@ mod wallpaper_generators;
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Commands, Generator};
-use config::{Config, Frequency, Generators};
+use configuration::{Config, Frequency, Generators};
 use os_implementations::open_editor;
 use rand::random_range;
 use wallpaper_generators::{
@@ -80,9 +80,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|generators| generators.to_vec())
                 .unwrap_or(Generators::ALL_GENERATORS.to_vec());
 
-            // TODO: add in automatic call of astra on cron schedule
-            // TODO: use this to setup automatic wallpaper refresh
-            let _frequency = config.frequency();
+            // TODO - v1.2.0: add in automatic call of astra on cron schedule
+            // TODO - v1.2.0: use this to setup automatic wallpaper refresh
+            // let _frequency = config.frequency();
 
             let index = random_range(0..generators.len());
             let image_type = &generators[index];
