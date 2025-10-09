@@ -2,6 +2,7 @@ use super::super::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
 use super::{
     frequency::Frequency,
     generators::{Generators, JuliaConfig, SolidConfig, SpotlightConfig},
+    theme::ThemeConfigs,
     user_config::UserConfig,
 };
 use directories::ProjectDirs;
@@ -34,6 +35,7 @@ impl Config {
                     julia_gen: user_config.julia_gen,
                     solid_gen: user_config.solid_gen,
                     spotlight_gen: user_config.spotlight_gen,
+                    themes: user_config.themes,
                 }),
             },
             Err(e) => {
@@ -103,6 +105,14 @@ impl Config {
         }
     }
 
+    pub fn themes(&self) -> Option<&ThemeConfigs> {
+        if let Some(user_config) = &self.user_config {
+            user_config.themes.as_ref()
+        } else {
+            None
+        }
+    }
+
     fn config_dir() -> PathBuf {
         ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
             .map(|dirs| dirs.config_dir().to_path_buf())
@@ -123,7 +133,7 @@ impl Config {
                 .as_str(),
             );
             fs::create_dir_all(Self::config_dir())
-                .map_err(|e| ConfigError::CreateDirError(e.to_string()))?;
+                .map_err(|e| ConfigError::CreateDir(e.to_string()))?;
             config.print_if_verbose(
                 format!(
                     "Creating configuration file at {}...",
@@ -132,9 +142,9 @@ impl Config {
                 .as_str(),
             );
             fs::File::create(Self::config_path())
-                .map_err(|e| ConfigError::CreateFileError(e.to_string()))?
+                .map_err(|e| ConfigError::CreateFile(e.to_string()))?
                 .write_all(b"{}")
-                .map_err(|e| ConfigError::CreateFileError(e.to_string()))?;
+                .map_err(|e| ConfigError::CreateFile(e.to_string()))?;
         }
         Ok(())
     }
@@ -147,7 +157,8 @@ impl Config {
             }
             let config = Self::read_config_file(&config_path, verbose)?;
             if verbose {
-                println!("configuration loaded - {config}");
+                println!("configuration loaded:");
+                println!("{config}");
             }
             Ok(config)
         } else {
@@ -162,7 +173,7 @@ impl Config {
         // TODO v1.1.0 - if part of config fails, see if you can partially read. Right now if part is wrong, it respects nothing and defaults to old behavior
         match fs::read_to_string(path) {
             Ok(data) => {
-                Ok(serde_json::from_str(&data).map_err(|e| ConfigError::ParseError(e.to_string())))?
+                Ok(serde_json::from_str(&data).map_err(|e| ConfigError::Parse(e.to_string())))?
             }
             Err(e) => {
                 if verbose {
@@ -177,21 +188,21 @@ impl Config {
 
 #[derive(Debug, PartialEq)]
 pub enum ConfigError {
-    CreateDirError(String),
-    CreateFileError(String),
-    ParseError(String),
+    CreateDir(String),
+    CreateFile(String),
+    Parse(String),
 }
 
 impl Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConfigError::CreateDirError(err_msg) => {
+            ConfigError::CreateDir(err_msg) => {
                 write!(f, "Unable to create configuration directory: {err_msg}")
             }
-            ConfigError::CreateFileError(err_msg) => {
+            ConfigError::CreateFile(err_msg) => {
                 write!(f, "Unable to create configuration file: {err_msg}")
             }
-            ConfigError::ParseError(err_msg) => {
+            ConfigError::Parse(err_msg) => {
                 write!(f, "Unable to parse configuration file: {err_msg}")
             }
         }

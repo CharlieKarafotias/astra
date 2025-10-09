@@ -1,93 +1,7 @@
+use super::color_theme::ColorTheme;
 use rand::Rng;
 use rand::distr::{Distribution, StandardUniform};
-use std::fmt::Display;
 
-// TODO v1.1.0 - this really isn't a generator - make new module called generator_utils and move
-// this and utils.rs there
-pub struct ColorTheme {
-    name: String,
-    supports_dark_mode: bool,
-    colors: Vec<[u8; 3]>,
-    colors_dark_mode: Option<Vec<[u8; 3]>>,
-}
-
-impl ColorTheme {
-    fn new(
-        name: String,
-        supports_dark_mode: bool,
-        colors: Vec<[u8; 3]>,
-        colors_dark_mode: Option<Vec<[u8; 3]>>,
-    ) -> Self {
-        Self {
-            name,
-            supports_dark_mode,
-            colors,
-            colors_dark_mode,
-        }
-    }
-
-    pub(super) fn get_colors(&self, dark_mode: bool) -> &Vec<[u8; 3]> {
-        if dark_mode && self.supports_dark_mode {
-            self.colors_dark_mode.as_ref().unwrap_or(&self.colors)
-        } else {
-            &self.colors
-        }
-    }
-}
-
-impl Display for ColorTheme {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Color Theme: {}, supports dark mode: {}, color_count: {}",
-            self.name,
-            self.supports_dark_mode,
-            self.colors.len()
-        )
-    }
-}
-
-pub struct ThemeSelector {
-    selected: ColorTheme,
-}
-
-impl ThemeSelector {
-    pub fn from_color_theme(theme: ColorTheme) -> ThemeSelector {
-        ThemeSelector { selected: theme }
-    }
-
-    pub fn random() -> ThemeSelector {
-        ThemeSelector::new(rand::random())
-    }
-
-    pub fn new(theme: ColorThemes) -> ThemeSelector {
-        match theme {
-            ColorThemes::NeonDreams => ThemeSelector::from_color_theme(theme_neon_dreams()),
-            ColorThemes::AuroraGlow => ThemeSelector::from_color_theme(theme_aurora_glow()),
-            ColorThemes::CyberSunset => ThemeSelector::from_color_theme(theme_cyber_sunset()),
-            ColorThemes::MysticForest => ThemeSelector::from_color_theme(theme_mystic_forest()),
-            ColorThemes::RetroPop => ThemeSelector::from_color_theme(theme_retro_pop()),
-            ColorThemes::OceanBreeze => ThemeSelector::from_color_theme(theme_ocean_breeze()),
-            ColorThemes::GalaxyVoyage => ThemeSelector::from_color_theme(theme_galaxy_voyage()),
-            ColorThemes::FireIce => ThemeSelector::from_color_theme(theme_fire_ice()),
-            ColorThemes::CandyCrush => ThemeSelector::from_color_theme(theme_candy_crush()),
-            ColorThemes::SunlitMeadow => ThemeSelector::from_color_theme(theme_sunlit_meadow()),
-        }
-    }
-    pub fn selected(&self) -> &ColorTheme {
-        &self.selected
-    }
-}
-
-impl Default for ThemeSelector {
-    fn default() -> Self {
-        ThemeSelector::random()
-    }
-}
-
-// Color themes
-// NOTE: Adding a new theme??? Make sure to update ColorThemes enum & theme count
-// Asserts will fail indicating places that need to be updated
 const THEME_COUNT: usize = 10;
 pub enum ColorThemes {
     NeonDreams,
@@ -120,7 +34,7 @@ impl Distribution<ColorThemes> for StandardUniform {
         }
     }
 }
-fn theme_neon_dreams() -> ColorTheme {
+pub(super) fn theme_neon_dreams() -> ColorTheme {
     ColorTheme::new(
         "Neon Dreams".to_string(),
         true,
@@ -141,7 +55,7 @@ fn theme_neon_dreams() -> ColorTheme {
     )
 }
 
-fn theme_aurora_glow() -> ColorTheme {
+pub(super) fn theme_aurora_glow() -> ColorTheme {
     ColorTheme::new(
         "Aurora Glow".to_string(),
         true,
@@ -162,7 +76,7 @@ fn theme_aurora_glow() -> ColorTheme {
     )
 }
 
-fn theme_cyber_sunset() -> ColorTheme {
+pub(super) fn theme_cyber_sunset() -> ColorTheme {
     ColorTheme::new(
         "Cyber Sunset".to_string(),
         true,
@@ -183,7 +97,7 @@ fn theme_cyber_sunset() -> ColorTheme {
     )
 }
 
-fn theme_mystic_forest() -> ColorTheme {
+pub(super) fn theme_mystic_forest() -> ColorTheme {
     ColorTheme::new(
         "Mystic Forest".to_string(),
         true,
@@ -204,7 +118,7 @@ fn theme_mystic_forest() -> ColorTheme {
     )
 }
 
-fn theme_retro_pop() -> ColorTheme {
+pub(super) fn theme_retro_pop() -> ColorTheme {
     ColorTheme::new(
         "Retro Pop".to_string(),
         true,
@@ -225,7 +139,7 @@ fn theme_retro_pop() -> ColorTheme {
     )
 }
 
-fn theme_ocean_breeze() -> ColorTheme {
+pub(super) fn theme_ocean_breeze() -> ColorTheme {
     ColorTheme::new(
         "Ocean Breeze".to_string(),
         true,
@@ -246,7 +160,7 @@ fn theme_ocean_breeze() -> ColorTheme {
     )
 }
 
-fn theme_galaxy_voyage() -> ColorTheme {
+pub(super) fn theme_galaxy_voyage() -> ColorTheme {
     ColorTheme::new(
         "Galaxy Voyage".to_string(),
         true,
@@ -267,7 +181,7 @@ fn theme_galaxy_voyage() -> ColorTheme {
     )
 }
 
-fn theme_fire_ice() -> ColorTheme {
+pub(super) fn theme_fire_ice() -> ColorTheme {
     ColorTheme::new(
         "Fire & Ice".to_string(),
         true,
@@ -288,7 +202,7 @@ fn theme_fire_ice() -> ColorTheme {
     )
 }
 
-fn theme_candy_crush() -> ColorTheme {
+pub(super) fn theme_candy_crush() -> ColorTheme {
     ColorTheme::new(
         "Candy Crush".to_string(),
         true,
@@ -309,7 +223,7 @@ fn theme_candy_crush() -> ColorTheme {
     )
 }
 
-fn theme_sunlit_meadow() -> ColorTheme {
+pub(super) fn theme_sunlit_meadow() -> ColorTheme {
     ColorTheme::new(
         "Sunlit Meadow".to_string(),
         true,

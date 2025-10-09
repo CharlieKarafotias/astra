@@ -29,7 +29,7 @@ impl Frequency {
                         parsed.push(c);
                         if let Some(c) = chars.peek()
                             && !c.is_numeric()
-                            && parsed.len() > 0
+                            && !parsed.is_empty()
                         {
                             mode = Mode::Unit;
                         }
@@ -40,26 +40,26 @@ impl Frequency {
                         parsed.push(c);
                         mode = Mode::Done;
                     } else {
-                        return Err(ConfigError::ParseError(
+                        return Err(ConfigError::Parse(
                             "unrecognized frequency unit, supported units are: seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), years(y)".to_string(),
                         ));
                     }
                 }
                 Mode::Done => {
-                    return Err(ConfigError::ParseError(
+                    return Err(ConfigError::Parse(
                         "frequency is improperly formatted - example of frequency: 1w".to_string(),
                     ));
                 }
             }
         }
 
-        if parsed.len() == 0 {
-            return Err(ConfigError::ParseError(
+        if parsed.is_empty() {
+            return Err(ConfigError::Parse(
                 "frequency must start with a number".to_string(),
             ));
         }
         if mode != Mode::Done {
-            return Err(ConfigError::ParseError(
+            return Err(ConfigError::Parse(
                 "frequency must end with unit - examples are: s, m, h, d, w, M, y".to_string(),
             ));
         }
@@ -110,6 +110,7 @@ impl<'de> Deserialize<'de> for Frequency {
 }
 
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[test]
@@ -157,14 +158,14 @@ mod tests {
     #[test]
     fn test_frequency_parse_unknown_unit_format() {
         let f = Frequency::new("1K");
-        assert_eq!(Err(ConfigError::ParseError("unrecognized frequency unit, supported units are: seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), years(y)".to_string())), f);
+        assert_eq!(Err(ConfigError::Parse("unrecognized frequency unit, supported units are: seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), years(y)".to_string())), f);
     }
 
     #[test]
     fn test_frequency_parse_no_time_format() {
         let f = Frequency::new("d");
         assert_eq!(
-            Err(ConfigError::ParseError(
+            Err(ConfigError::Parse(
                 "frequency must start with a number".to_string()
             )),
             f
@@ -175,7 +176,7 @@ mod tests {
     fn test_frequency_parse_no_unit_format() {
         let f = Frequency::new("100");
         assert_eq!(
-            Err(ConfigError::ParseError(
+            Err(ConfigError::Parse(
                 "frequency must end with unit - examples are: s, m, h, d, w, M, y".to_string()
             )),
             f
@@ -186,7 +187,7 @@ mod tests {
     fn test_frequency_parse_no_empty_string() {
         let f = Frequency::new("");
         assert_eq!(
-            Err(ConfigError::ParseError(
+            Err(ConfigError::Parse(
                 "frequency must start with a number".to_string()
             )),
             f

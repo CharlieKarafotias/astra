@@ -1,10 +1,10 @@
 use super::super::{
-    config::Config,
+    configuration::Config,
     os_implementations::{get_screen_resolution, is_dark_mode_active},
-    wallpaper_generators::color_themes::ThemeSelector,
+    themes::ThemeSelector,
 };
 use super::utils::{AstraImage, Operator, WallpaperGeneratorError, create_color_map, scale_image};
-use crate::config::generators::julia::Appearance;
+use crate::configuration::generators::julia::Appearance;
 use image::{ImageBuffer, Rgb};
 use num_complex::Complex;
 use rand::random_range;
@@ -29,7 +29,7 @@ const COMPLEX_NUMS: [(f64, f64); 13] = [
 pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGeneratorError> {
     config.print_if_verbose("Generating julia set...");
     let (width, height) =
-        get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        get_screen_resolution().map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
     config.print_if_verbose(format!("Detected screen resolution: {}x{}", width, height).as_str());
 
     if config.respect_user_config {
@@ -42,7 +42,7 @@ pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGenera
         })?;
     let dark_mode: bool = match appearance {
         Appearance::Auto => {
-            is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
+            is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?
         }
         Appearance::Light => false,
         Appearance::Dark => true,
@@ -50,9 +50,14 @@ pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGenera
 
     config.print_if_verbose(format!("Dark mode: {dark_mode}").as_str());
 
-    // TODO: v1.1.0 - implement color theme logic will need to make ThemeSelector from config
-    // let theme = crate::respect_user_config_or_default!(config, julia_gen, respect_color_themes, { ThemeSelector::random() })?;
-    let theme = ThemeSelector::random(); // TODO: remove once above is implemented
+    let should_respect_color_themes =
+        crate::respect_user_config_or_default!(config, julia_gen, respect_color_themes, {
+            Ok(false)
+        })?;
+    let theme = match (should_respect_color_themes, config.themes()) {
+        (true, Some(themes)) => themes.random().to_theme_selector(),
+        (true, None) | (false, _) => ThemeSelector::random(),
+    };
     let selected_theme = theme.selected();
     config.print_if_verbose(format!("Selected theme: {selected_theme}",).as_str());
 
@@ -72,7 +77,7 @@ pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGenera
     config.print_if_verbose(format!("Selected julia set: {}", selected_julia_set).as_str());
 
     // Find hotspots and randomly select one
-    let points_weights = sample_julia_set(&config, selected_julia_set, width, height)?;
+    let points_weights = sample_julia_set(config, selected_julia_set, width, height)?;
     let complex_hotspot = points_weights[random_range(0..points_weights.len())].0;
     config.print_if_verbose(format!("Selected hotspot: {}", complex_hotspot).as_str());
 
@@ -169,7 +174,7 @@ fn sample_julia_set(
 
 #[cfg(test)]
 mod tests {
-    use crate::config::Config;
+    use crate::configuration::Config;
 
     #[test]
     fn test_sample_julia_set() {

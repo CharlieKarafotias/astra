@@ -42,19 +42,20 @@ impl Display for JuliaConfig {
         // only write if defined, else return empty string
         let mut s = String::new();
         if let Some(val) = &self.appearance {
-            writeln!(&mut s, "  appearance: {:?}", val)?;
+            writeln!(&mut s, "    appearance: {:?}", val)?;
         }
         if let Some(val) = &self.complex_numbers {
-            writeln!(&mut s, "  complex_numbers: {:?}", val)?;
+            writeln!(&mut s, "    complex_numbers: {:?}", val)?;
         }
         if let Some(val) = &self.starting_sample_threshold {
-            writeln!(&mut s, "  starting_sample_threshold: {:?}", val)?;
+            writeln!(&mut s, "    starting_sample_threshold: {:?}", val)?;
         }
         if let Some(val) = &self.respect_color_themes {
-            writeln!(&mut s, "  respect_color_themes: {:?}", val)?;
+            writeln!(&mut s, "    respect_color_themes: {:?}", val)?;
         }
-        if s.len() != 0 {
-            writeln!(f, "")?;
+        if !s.is_empty() {
+            writeln!(f)?;
+            s.pop(); // remove last newline character
         }
         write!(f, "{s}")
     }

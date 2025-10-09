@@ -28,16 +28,17 @@ impl Display for SpotlightConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut s = String::new();
         if let Some(val) = &self.country {
-            writeln!(&mut s, "  country: {}", val)?;
+            writeln!(&mut s, "    country: {}", val)?;
         }
         if let Some(val) = &self.locale {
-            writeln!(&mut s, "  locale: {}", val)?;
+            writeln!(&mut s, "    locale: {}", val)?;
         }
         if let Some(val) = &self.respect_color_themes {
-            writeln!(&mut s, "  respect_color_themes: {}", val)?;
+            writeln!(&mut s, "    respect_color_themes: {}", val)?;
         }
-        if s.len() != 0 {
-            writeln!(f, "")?;
+        if !s.is_empty() {
+            writeln!(f)?;
+            s.pop(); // remove last newline character
         }
         write!(f, "{}", s)
     }

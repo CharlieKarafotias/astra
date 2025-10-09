@@ -18,10 +18,7 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, MacOSError> {
         .output()
         .map_err(|_| MacOSError::DarkModeError)?;
     let output_str = String::from_utf8(output.stdout).map_err(|_| MacOSError::DarkModeError)?;
-    let dark_mode_enabled = match output_str.trim().to_lowercase().as_str() {
-        "dark" => true,
-        _ => false,
-    };
+    let dark_mode_enabled = matches!(output_str.trim().to_lowercase().as_str(), "dark");
     Ok(dark_mode_enabled)
 }
 
@@ -85,7 +82,7 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
 ///
 /// # Errors
 /// - Returns a `MacOSError` with the `OpenEditorError` variant if the command to open the
-/// file cannot be executed for any reason.
+///   file cannot be executed for any reason.
 pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
     let editor = var("EDITOR").unwrap_or("open".to_string());
     let res = match editor.as_str() {
@@ -172,7 +169,7 @@ fn parse_output(output: &str) -> Result<(u32, u32), MacOSError> {
             let resolution_vals = x
                 .split(" x ")
                 .map(|x| {
-                    let num: String = x.chars().filter(|c| c.is_digit(10)).collect();
+                    let num: String = x.chars().filter(|c| c.is_ascii_digit()).collect();
                     num.parse::<u32>()
                         .map_err(|_| MacOSError::ResolutionNotFound)
                 })
@@ -264,7 +261,7 @@ impl Error for MacOSError {}
 // --- Tests ---
 
 #[cfg(test)]
-mod macos {
+mod macos_tests {
     use super::*;
 
     #[test]

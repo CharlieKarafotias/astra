@@ -1,4 +1,8 @@
-use super::super::{cli::SolidMode, config::Config, os_implementations::get_screen_resolution};
+use super::super::{
+    cli::SolidMode, configuration::Config, configuration::generators::julia::Appearance,
+    os_implementations::get_screen_resolution, os_implementations::is_dark_mode_active,
+    themes::ThemeSelector,
+};
 use super::utils::{AstraImage, WallpaperGeneratorError};
 use clap::ValueEnum;
 use image::{ImageBuffer, Rgb};
@@ -12,14 +16,41 @@ pub fn generate_solid_color(
     config.print_if_verbose("Generating solid color image...");
 
     let (width, height) =
-        get_screen_resolution().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        get_screen_resolution().map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
     config.print_if_verbose(format!("Detected screen resolution: {}x{}", width, height).as_str());
 
     if config.respect_user_config {
         config.print_if_verbose("User config detected with solid_gen options...");
+
+        // Current setup will always prefer user_theme to config setup, need to decide if this is desired behavior
+        let should_respect_color_themes =
+            crate::respect_user_config_or_default!(config, solid_gen, respect_color_themes, {
+                Ok(false)
+            })?;
+        let theme = match (should_respect_color_themes, config.themes()) {
+            (true, Some(themes)) => themes.random().to_theme_selector(),
+            (true, None) | (false, _) => ThemeSelector::random(),
+        };
+        let selected_theme = theme.selected();
+        let appearance: Appearance =
+            crate::respect_user_config_or_default!(config, julia_gen, appearance, {
+                Ok(Appearance::Auto)
+            })?;
+        let dark_mode: bool = match appearance {
+            Appearance::Auto => {
+                is_dark_mode_active().map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?
+            }
+            Appearance::Light => false,
+            Appearance::Dark => true,
+        };
+        config.print_if_verbose(format!("Selected theme: {selected_theme}",).as_str());
+        let [r, g, b] = selected_theme
+            .average_color(dark_mode)
+            .map_err(|e| WallpaperGeneratorError::ImageGeneration(e.to_string()))?;
+        let imgbuf = generate_image(&SolidMode::Rgb { r, g, b }, width, height);
+        config.print_if_verbose("Image generated!");
+        return Ok(imgbuf);
     }
-    // TODO: v1.1.0 - implement color theme logic will need to make ThemeSelector from config
-    // let theme = crate::respect_user_config_or_default!(config, solid_gen, respect_color_themes, { ThemeSelector::random() })?;
 
     let mut mode_options: Vec<SolidMode> = vec![];
     let preferred_default_colors: Vec<Color> =
@@ -42,13 +73,12 @@ pub fn generate_solid_color(
         })
     });
 
-    let imgbuf: AstraImage;
-    if mode_options.is_empty() {
+    let imgbuf: AstraImage = if mode_options.is_empty() {
         config.print_if_verbose(
             "read preferred_default_colors & preferred_rgb_colors config, but none were found",
         );
         // Use mode passed in instead since no config setup
-        imgbuf = generate_image(&mode, width, height);
+        generate_image(mode, width, height)
     } else {
         config.print_if_verbose(
             "selecting random mode based on preferred_default_colors & preferred_rgb_colors config",
@@ -58,8 +88,8 @@ pub fn generate_solid_color(
         let rand_mode = mode_options
             .get(n)
             .expect("random selected solid mode from user config should be defined");
-        imgbuf = generate_image(rand_mode, width, height);
-    }
+        generate_image(rand_mode, width, height)
+    };
 
     config.print_if_verbose("Image generated!");
     Ok(imgbuf)
@@ -76,9 +106,7 @@ fn generate_image(mode: &SolidMode, width: u32, height: u32) -> AstraImage {
                 rand::random::<u8>(),
             ]),
         ),
-        SolidMode::Rgb { r, g, b } => {
-            ImageBuffer::from_pixel(width, height, Rgb([r.clone(), g.clone(), b.clone()]))
-        }
+        SolidMode::Rgb { r, g, b } => ImageBuffer::from_pixel(width, height, Rgb([*r, *g, *b])),
         SolidMode::Color { name } => {
             let (r, g, b) = name.rgb();
             ImageBuffer::from_pixel(width, height, Rgb([r, g, b]))

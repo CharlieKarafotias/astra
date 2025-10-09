@@ -1,6 +1,6 @@
 use super::Color;
 use crate::{
-    config::Config,
+    configuration::Config,
     wallpaper_generators::{
         AstraImage, WallpaperGeneratorError, generate_bing_spotlight, generate_julia_set,
         generate_solid_color,
