@@ -1,10 +1,9 @@
 use super::super::{
-    cli::SolidMode, configuration::Config, os_implementations::get_screen_resolution,
+    cli::SolidMode, configuration::Config, configuration::generators::julia::Appearance,
+    os_implementations::get_screen_resolution, os_implementations::is_dark_mode_active,
+    themes::ThemeSelector,
 };
 use super::utils::{AstraImage, WallpaperGeneratorError};
-use crate::configuration::generators::julia::Appearance;
-use crate::os_implementations::is_dark_mode_active;
-use crate::themes::ThemeSelector;
 use clap::ValueEnum;
 use image::{ImageBuffer, Rgb};
 use rand::{Rng, rng};

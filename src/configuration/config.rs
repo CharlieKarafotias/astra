@@ -30,8 +30,7 @@ impl Config {
                 verbose,
                 user_config: Some(UserConfig {
                     auto_clean: user_config.auto_clean,
-                    // TODO v1.2.0: add frequency back in to control how often wallpaper changes
-                    // frequency: user_config.frequency,
+                    frequency: user_config.frequency,
                     generators: user_config.generators,
                     julia_gen: user_config.julia_gen,
                     solid_gen: user_config.solid_gen,
@@ -66,14 +65,13 @@ impl Config {
         }
     }
 
-    // TODO v1.2.0: add frequency back in to control how often wallpaper changes
-    // pub fn frequency(&self) -> Option<&Frequency> {
-    //     if let Some(user_config) = &self.user_config {
-    //         user_config.frequency.as_ref()
-    //     } else {
-    //         None
-    //     }
-    // }
+    pub fn frequency(&self) -> Option<&Frequency> {
+        if let Some(user_config) = &self.user_config {
+            user_config.frequency.as_ref()
+        } else {
+            None
+        }
+    }
 
     pub fn auto_clean(&self) -> Option<&Frequency> {
         if let Some(user_config) = &self.user_config {
@@ -215,11 +213,9 @@ impl Error for ConfigError {}
 
 #[cfg(test)]
 mod tests {
-    // TODO v1.2.0: add frequency back in to control how often wallpaper changes
-    // use super::super::super::cli::Generator;
+    use super::super::super::cli::Generator;
     use super::*;
-    // TODO v1.2.0: add frequency back in to control how often wallpaper changes
-    // use crate::cli::SolidMode;
+    use crate::cli::SolidMode;
     use std::path::PathBuf;
 
     #[test]
@@ -229,42 +225,40 @@ mod tests {
         assert_eq!(config, Ok(UserConfig::default()));
     }
 
-    // TODO v1.2.0: add frequency back in to control how often wallpaper changes
-    // #[test]
-    // fn test_read_config_file_parses_correct_partial_config_when_frequency_defined() {
-    //     let dir = tempfile::tempdir().unwrap();
-    //     let path = dir.path().join("config.json");
-    //     fs::write(&path, r#"{ "frequency": "1w" }"#).unwrap();
+    #[test]
+    fn test_read_config_file_parses_correct_partial_config_when_frequency_defined() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{ "frequency": "1w" }"#).unwrap();
 
-    //     let config = Config::read_config_file(&path, false).expect("file should exist");
-    //     assert_eq!(config.frequency, Some(Frequency::new("1w").unwrap()));
-    //     assert_eq!(config.generators, None);
-    // }
+        let config = Config::read_config_file(&path, false).expect("file should exist");
+        assert_eq!(config.frequency, Some(Frequency::new("1w").unwrap()));
+        assert_eq!(config.generators, None);
+    }
 
-    // TODO v1.2.0: add frequency back in to control how often wallpaper changes
-    // #[test]
-    // fn test_read_config_file_parses_correct_partial_config_when_generators_defined() {
-    //     let dir = tempfile::tempdir().unwrap();
-    //     let path = dir.path().join("config.json");
-    //     fs::write(
-    //         &path,
-    //         r#"{ "generators": ["spotlight", "julia", "solid"] }"#,
-    //     )
-    //     .unwrap();
+    #[test]
+    fn test_read_config_file_parses_correct_partial_config_when_generators_defined() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{ "generators": ["spotlight", "julia", "solid"] }"#,
+        )
+        .unwrap();
 
-    //     let config = Config::read_config_file(&path, false).expect("file should exist");
-    //     assert_eq!(config.frequency, None);
-    //     assert_eq!(
-    //         config.generators,
-    //         Some(Generators(Vec::from([
-    //             Generator::Spotlight,
-    //             Generator::Julia,
-    //             Generator::Solid {
-    //                 mode: SolidMode::Random
-    //             }
-    //         ])))
-    //     );
-    // }
+        let config = Config::read_config_file(&path, false).expect("file should exist");
+        assert_eq!(config.frequency, None);
+        assert_eq!(
+            config.generators,
+            Some(Generators(Vec::from([
+                Generator::Spotlight,
+                Generator::Julia,
+                Generator::Solid {
+                    mode: SolidMode::Random
+                }
+            ])))
+        );
+    }
 
     #[test]
     fn test_read_config_file_parses_correct_empty_config() {
