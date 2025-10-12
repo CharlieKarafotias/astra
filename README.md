@@ -161,7 +161,7 @@ randomly select a wallpaper generator and generate a new image.
 When making updates to the `frequency` key in your configuration file, you must:
 1. Completely remove the `frequency` key from config file
 2. Run `astra` command. This will unload the plist file behind the scenes
-3. Ope configuration file and update re-add `frequency` key to the value desired. 
+3. Open configuration file and update re-add `frequency` key to the value desired. 
 
 ## 🤝 Contributing
 
