@@ -128,11 +128,13 @@ pub(crate) fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
     path_to_astra_plist.push("Library");
     path_to_astra_plist.push("LaunchAgents");
     path_to_astra_plist.push(format!("{QUALIFIER}.{ORGANIZATION}.{APPLICATION}.plist"));
-    let user_id = Command::new("id")
+    let user_id_vec = Command::new("id")
         .arg("-u")
         .output()
         .map_err(|e| MacOSError::OS(format!("unable to get user id: {e}")))?
         .stdout;
+    let mut user_id = String::from_utf8_lossy(&user_id_vec).to_string();
+    trim_newline(&mut user_id);
     if let Some(frequency) = config.frequency() {
         // create/update astra task
         let file_contents = gen_plist_for_astra(frequency)?;
@@ -140,10 +142,9 @@ pub(crate) fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
             MacOSError::OS(format!("failed to create/update plist file: {err_msg}"))
         })?;
         // NOTE: must bootstrap new plist job to launchctl or will not work until system restart
-        // TODO: BUG correct command is: launchctl bootstrap gui/`id -u` ~/Library/LaunchAgents/dev.CharlieKarafotias.Astra.plist
         let o = Command::new("launchctl")
             .arg("bootstrap")
-            .arg(format!("gui/{}", String::from_utf8_lossy(&user_id)))
+            .arg(format!("gui/{user_id}"))
             .arg(&path_to_astra_plist)
             .output()
             .map_err(|e| MacOSError::Launchctl(e.to_string()))?;
@@ -152,10 +153,9 @@ pub(crate) fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
         );
     } else {
         // NOTE: runs bootout and deletes plist to keep clean
-        // TODO: BUG correct command is: launchctl bootout gui/`id -u` ~/Library/LaunchAgents/dev.CharlieKarafotias.Astra.plist
         Command::new("launchctl")
             .arg("bootout")
-            .arg(format!("gui/{}", String::from_utf8_lossy(&user_id)))
+            .arg(format!("gui/{user_id}"))
             .arg(&path_to_astra_plist)
             .output()
             .map_err(|e| MacOSError::Launchctl(e.to_string()))?;
@@ -163,6 +163,15 @@ pub(crate) fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
             .map_err(|err_msg| MacOSError::OS(format!("failed to delete plist file: {err_msg}")))?;
     }
     Ok(())
+}
+
+fn trim_newline(s: &mut String) {
+    if s.ends_with('\n') {
+        s.pop();
+        if s.ends_with('\r') {
+            s.pop();
+        }
+    }
 }
 
 /// A helper function to generate the contents of the astra program's plist file.
