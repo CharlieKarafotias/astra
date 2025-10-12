@@ -120,6 +120,10 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSE
     Ok(())
 }
 
+pub(crate) fn handle_frequency(config: &Config) -> Result<(), LinuxOSError> {
+    todo!("implement me")
+}
+
 // --- OS specific code ---
 
 // --- Helper functions ---

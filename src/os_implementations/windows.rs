@@ -97,6 +97,10 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsE
     Ok(())
 }
 
+pub(crate) fn handle_frequency(config: &Config) -> Result<(), WindowsError> {
+    todo!("implement me")
+}
+
 // --- OS specific code ---
 
 // --- Errors ---
