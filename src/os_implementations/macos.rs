@@ -389,7 +389,7 @@ impl std::fmt::Display for MacOSError {
         match self {
             MacOSError::DarkModeError => write!(f, "Unable to determine dark mode status"),
             MacOSError::Launchctl(err_msg) => {
-                write!(f, "Unable to bootstrap job to launchctl: {err_msg}")
+                write!(f, "Launchctl error: {err_msg}")
             }
             MacOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
             MacOSError::OpenEditorError => write!(f, "Unable to open editor"),
