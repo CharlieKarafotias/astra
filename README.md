@@ -156,6 +156,12 @@ randomly select a wallpaper generator and generate a new image.
 
 💡 More keys and customization options may be added in future releases. Feel free to suggest ideas or contribute!
 
+#### Configuration Notes (macOS)
+
+When making updates to the `frequency` key in your configuration file, you must:
+1. Completely remove the `frequency` key from config file
+2. Run `astra` command. This will unload the plist file behind the scenes
+3. Ope configuration file and update re-add `frequency` key to the value desired. 
 
 ## 🤝 Contributing
 

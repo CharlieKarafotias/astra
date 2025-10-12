@@ -121,50 +121,52 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSErr
 ///
 /// The job is defined in the User Agents location (~/Library/LaunchAgents/)
 pub(crate) fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
-    let mut path_to_astra_plist = UserDirs::new()
-        .expect("user dirs should exist")
-        .home_dir()
-        .to_path_buf();
-    path_to_astra_plist.push("Library");
-    path_to_astra_plist.push("LaunchAgents");
-    path_to_astra_plist.push(format!("{QUALIFIER}.{ORGANIZATION}.{APPLICATION}.plist"));
-    let user_id_vec = Command::new("id")
-        .arg("-u")
-        .output()
-        .map_err(|e| MacOSError::OS(format!("unable to get user id: {e}")))?
-        .stdout;
-    let mut user_id = String::from_utf8_lossy(&user_id_vec).to_string();
-    trim_newline(&mut user_id);
+    let path_to_astra_plist = gen_plist_path()?;
+    let user_id = get_user_id()?;
     if let Some(frequency) = config.frequency() {
-        // create/update astra task
         let file_contents = gen_plist_for_astra(frequency)?;
+        // NOTE: - it is a known "issue" that you must turn off frequency first, run astra,
+        // then add new frequency update for launchctl to accept changes
         fs::write(&path_to_astra_plist, file_contents).map_err(|err_msg| {
             MacOSError::OS(format!("failed to create/update plist file: {err_msg}"))
         })?;
-        // NOTE: must bootstrap new plist job to launchctl or will not work until system restart
-        let o = Command::new("launchctl")
-            .arg("bootstrap")
-            .arg(format!("gui/{user_id}"))
-            .arg(&path_to_astra_plist)
-            .output()
-            .map_err(|e| MacOSError::Launchctl(e.to_string()))?;
-        config.print_if_verbose(
-            format!("launchctl out: {}", String::from_utf8_lossy(&o.stdout)).as_str(),
-        );
+        launchctl_bootstrap_astra(&path_to_astra_plist, &user_id)?;
     } else {
-        // NOTE: runs bootout and deletes plist to keep clean
-        Command::new("launchctl")
-            .arg("bootout")
-            .arg(format!("gui/{user_id}"))
-            .arg(&path_to_astra_plist)
-            .output()
-            .map_err(|e| MacOSError::Launchctl(e.to_string()))?;
-        fs::remove_file(&path_to_astra_plist)
-            .map_err(|err_msg| MacOSError::OS(format!("failed to delete plist file: {err_msg}")))?;
+        launchctl_bootout_astra(&path_to_astra_plist, &user_id)?;
+        if path_to_astra_plist.exists() {
+            fs::remove_file(&path_to_astra_plist).map_err(|err_msg| {
+                MacOSError::OS(format!("failed to delete plist file: {err_msg}"))
+            })?;
+        }
     }
     Ok(())
 }
 
+/// A helper function that bootstraps the plist file to launchctl so the Job can run prior to
+/// system restart
+fn launchctl_bootstrap_astra(plist_path: &PathBuf, user_id: &str) -> Result<(), MacOSError> {
+    Command::new("launchctl")
+        .arg("bootstrap")
+        .arg(format!("gui/{user_id}"))
+        .arg(plist_path)
+        .output()
+        .map_err(|e| MacOSError::Launchctl(e.to_string()))?;
+    Ok(())
+}
+
+/// A helper function that bootouts the plit file from launchctl so the Job does not continue to
+/// run when user updates config file
+fn launchctl_bootout_astra(plist_path: &PathBuf, user_id: &str) -> Result<(), MacOSError> {
+    Command::new("launchctl")
+        .arg("bootout")
+        .arg(format!("gui/{user_id}"))
+        .arg(plist_path)
+        .output()
+        .map_err(|e| MacOSError::Launchctl(e.to_string()))?;
+    Ok(())
+}
+
+/// A helper function to trim off new line characters
 fn trim_newline(s: &mut String) {
     if s.ends_with('\n') {
         s.pop();
@@ -172,6 +174,37 @@ fn trim_newline(s: &mut String) {
             s.pop();
         }
     }
+}
+
+/// A helper function that gets the users current id
+///
+/// Errors:
+/// - Will error if user id command fails
+fn get_user_id() -> Result<String, MacOSError> {
+    let user_id_vec = Command::new("id")
+        .arg("-u")
+        .output()
+        .map_err(|e| MacOSError::OS(format!("unable to get user id: {e}")))?
+        .stdout;
+    let mut user_id = String::from_utf8_lossy(&user_id_vec).to_string();
+    trim_newline(&mut user_id);
+    Ok(user_id)
+}
+
+/// A helper function that generates the plist file path
+/// The path will be ~/Library/LaunchAgents/dev.CharlieKarafotias.astra.plist
+///
+/// # Errors
+/// - Will error is UserDirs is None. This should NEVER happen!
+fn gen_plist_path() -> Result<PathBuf, MacOSError> {
+    let mut path_to_astra_plist = UserDirs::new()
+        .ok_or(MacOSError::OS("home directory not defined".to_string()))?
+        .home_dir()
+        .to_path_buf();
+    path_to_astra_plist.push("Library");
+    path_to_astra_plist.push("LaunchAgents");
+    path_to_astra_plist.push(format!("{QUALIFIER}.{ORGANIZATION}.{APPLICATION}.plist"));
+    Ok(path_to_astra_plist)
 }
 
 /// A helper function to generate the contents of the astra program's plist file.
