@@ -166,16 +166,6 @@ fn launchctl_bootout_astra(plist_path: &PathBuf, user_id: &str) -> Result<(), Ma
     Ok(())
 }
 
-/// A helper function to trim off new line characters
-fn trim_newline(s: &mut String) {
-    if s.ends_with('\n') {
-        s.pop();
-        if s.ends_with('\r') {
-            s.pop();
-        }
-    }
-}
-
 /// A helper function that gets the users current id
 ///
 /// Errors:
@@ -187,7 +177,7 @@ fn get_user_id() -> Result<String, MacOSError> {
         .map_err(|e| MacOSError::OS(format!("unable to get user id: {e}")))?
         .stdout;
     let mut user_id = String::from_utf8_lossy(&user_id_vec).to_string();
-    trim_newline(&mut user_id);
+    user_id = user_id.trim().to_string();
     Ok(user_id)
 }
 
