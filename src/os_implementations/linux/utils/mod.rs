@@ -1,8 +1,7 @@
-use super::super::Config;
+use super::super::super::Config;
+use super::LinuxOSError;
 use std::{
     env::var,
-    error::Error,
-    fmt::Display,
     path::PathBuf,
     process::{Command, Stdio},
 };
@@ -12,7 +11,7 @@ use std::{
 ///
 /// Tested on:
 ///   - Ubuntu 25.04 with Gnome Desktop
-pub(crate) fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
+pub fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
     // TODO: add support for other linux distros (non gnome based)
     let output = Command::new("gsettings")
         .arg("get")
@@ -34,7 +33,7 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
 /// Returns a `LinuxOSError` with the `ResolutionNotFound` variant if the command to determine
 /// screen resolution cannot be executed. It can also return an error if the output
 /// cannot be parsed.
-pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
+pub fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
     // First, get the primary display name
     let output = Command::new("xrandr")
         .arg("--current")
@@ -79,7 +78,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
 ///
 /// Returns a `LinuxOSError` with the `CommandError` variant if the `gsettings` command
 /// cannot be executed.
-pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
+pub fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
     // TODO: add support for other linux distros (non gnome based)
     let picture_uri_arg = if is_dark_mode_active()? {
         "picture-uri-dark"
@@ -103,7 +102,7 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
 /// # Errors
 /// - Returns a `LinuxOSError` with the `OpenEditorError` variant if the command to open the
 /// file cannot be executed for any reason.
-pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSError> {
+pub fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSError> {
     let editor = var("EDITOR").unwrap_or("vim".to_string());
     config.print_if_verbose(&format!("Using editor: {}", editor));
     let status = Command::new(&editor)
@@ -120,49 +119,18 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSE
     Ok(())
 }
 
-pub(crate) fn handle_frequency(config: &Config) -> Result<(), LinuxOSError> {
-    todo!("implement me")
+/// CRUD operator function for interfacing with systemd system in Linux
+///
+/// This function takes in the configuration struct and checks if user config contains a frequency
+/// key/value.
+///
+/// - If key/value is defined, take the frequency and ensure astra service/timer is created/updated
+/// - If key/value is not defined, ensure the astra service/timer file is deleted (if it exists)
+///
+/// The service/timer files are defined in following places:
+///
+/// - Service file: TODO
+/// - Timer file: TODO
+pub fn handle_frequency(config: &Config) -> Result<(), LinuxOSError> {
+    todo!("v1.1.0 - implement me check out gen_service_file and gen_timer_file when going to impl")
 }
-
-// --- OS specific code ---
-
-// --- Helper functions ---
-// --- Helper functions ---
-
-// --- Errors ---
-#[derive(Debug, PartialEq)]
-pub enum LinuxOSError {
-    CommandError(String),
-    DarkModeError(String),
-    OpenEditorError,
-    ParseError(String),
-    ResolutionNotFound(String),
-}
-
-impl Display for LinuxOSError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LinuxOSError::CommandError(err_msg) => {
-                write!(f, "Unable to execute command: {err_msg}")
-            }
-            LinuxOSError::DarkModeError(err_msg) => {
-                write!(f, "Unable to determine dark mode status: {err_msg}")
-            }
-            LinuxOSError::OpenEditorError => {
-                write!(f, "Unable to open editor")
-            }
-            LinuxOSError::ParseError(err_msg) => {
-                write!(f, "Unable to parse output: {err_msg}")
-            }
-            LinuxOSError::ResolutionNotFound(err_msg) => {
-                write!(
-                    f,
-                    "Unable to determine resolution of main display: {err_msg}"
-                )
-            }
-        }
-    }
-}
-
-impl Error for LinuxOSError {}
-// --- Errors ---
