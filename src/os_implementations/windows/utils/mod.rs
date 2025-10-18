@@ -1,6 +1,6 @@
-use super::super::Config;
+use super::super::super::Config;
+use super::WindowsError;
 use std::{
-    error::Error,
     os::{raw::c_void, windows::ffi::OsStrExt},
     path::PathBuf,
     process::Command,
@@ -16,7 +16,6 @@ use windows::{
     core::PCWSTR,
 };
 
-// --- OS specific code ---
 /// Checks if the user's OS is currently in dark mode
 ///
 /// # Errors
@@ -97,34 +96,13 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsE
     Ok(())
 }
 
+/// CRUD operator function for interfacing with Windows task scheduler service
+///
+/// This function will take in the configuration struct and check if the user
+/// config contains a frequency key/value
+///
+/// - IF key/value is defined, take the frequency and ensure astra task is created/updated
+/// - IF key/value is not defined, ensure astra task is removed from scheduled tasks
 pub(crate) fn handle_frequency(config: &Config) -> Result<(), WindowsError> {
-    todo!("implement me")
+    todo!("v1.1.0 - implement handle frequency using task_scheduler module")
 }
-
-// --- OS specific code ---
-
-// --- Errors ---
-#[derive(Debug, PartialEq)]
-pub enum WindowsError {
-    DarkModeError(String),
-    OpenEditorError(String),
-    UpdateDesktopError(String),
-}
-
-impl std::fmt::Display for WindowsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WindowsError::DarkModeError(err) => {
-                write!(f, "Unable to determine dark mode status: {err}")
-            }
-            WindowsError::OpenEditorError(err) => {
-                write!(f, "Unable to open file in default editor: {err}")
-            }
-            WindowsError::UpdateDesktopError(err) => {
-                write!(f, "Unable to update desktop wallpaper: {err}")
-            }
-        }
-    }
-}
-impl Error for WindowsError {}
-// --- Errors ---
