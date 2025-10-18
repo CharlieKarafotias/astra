@@ -1,7 +1,9 @@
-use super::super::{Config, Frequency};
-use crate::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
-use directories::UserDirs;
-use std::{env::var, error::Error, fs, path::PathBuf, process::Command};
+use super::super::super::Config;
+use super::{
+    MacOSError, gen_plist_for_astra, gen_plist_path, launchctl_bootout_astra,
+    launchctl_bootstrap_astra,
+};
+use std::{env::var, fs, path::PathBuf, process::Command};
 
 // --- OS specific code ---
 
@@ -12,7 +14,7 @@ use std::{env::var, error::Error, fs, path::PathBuf, process::Command};
 /// Returns a `MacOSError` with the `DarkModeError` variant if the command to determine
 /// OS dark mode state cannot be executed. It can also return an error if the output
 /// cannot be parsed.
-pub(crate) fn is_dark_mode_active() -> Result<bool, MacOSError> {
+pub fn is_dark_mode_active() -> Result<bool, MacOSError> {
     let output = Command::new("defaults")
         .arg("read")
         .arg("-g")
@@ -43,7 +45,7 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, MacOSError> {
 /// If the resolution of the main display cannot be found in the output of
 /// the `system_profiler` command, this function will return an `Err` containing a
 /// `MacOSError` with the `ResolutionNotFound` variant.
-pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
+pub fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
     let output = Command::new("system_profiler")
         .arg("SPDisplaysDataType")
         .arg("-detailLevel")
@@ -64,7 +66,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
 ///
 /// If the `osascript` command cannot be executed for any reason, this function will return an
 /// `Err` containing a `MacOSError` with the `SystemProfilerError` variant.
-pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
+pub fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
     let script = format!(
         "tell application \"System Events\" to set picture of every desktop to POSIX file {:?}",
         path.as_os_str().to_os_string()
@@ -85,7 +87,7 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
 /// # Errors
 /// - Returns a `MacOSError` with the `OpenEditorError` variant if the command to open the
 ///   file cannot be executed for any reason.
-pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
+pub fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
     let editor = var("EDITOR").unwrap_or("open".to_string());
     let _ = match editor.as_str() {
         "open" => {
@@ -120,9 +122,8 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSErr
 /// - If key/value is not defined, bootout of Job and then delete file
 ///
 /// The job is defined in the User Agents location (~/Library/LaunchAgents/)
-pub(crate) fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
+pub fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
     let path_to_astra_plist = gen_plist_path()?;
-    let user_id = get_user_id()?;
     if let Some(frequency) = config.frequency() {
         let file_contents = gen_plist_for_astra(frequency)?;
         // NOTE: - it is a known "issue" that you must turn off frequency first, run astra,
@@ -130,9 +131,9 @@ pub(crate) fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
         fs::write(&path_to_astra_plist, file_contents).map_err(|err_msg| {
             MacOSError::OS(format!("failed to create/update plist file: {err_msg}"))
         })?;
-        launchctl_bootstrap_astra(&path_to_astra_plist, &user_id)?;
+        launchctl_bootstrap_astra(&path_to_astra_plist)?;
     } else {
-        launchctl_bootout_astra(&path_to_astra_plist, &user_id)?;
+        launchctl_bootout_astra(&path_to_astra_plist)?;
         if path_to_astra_plist.exists() {
             fs::remove_file(&path_to_astra_plist).map_err(|err_msg| {
                 MacOSError::OS(format!("failed to delete plist file: {err_msg}"))
@@ -140,95 +141,6 @@ pub(crate) fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
         }
     }
     Ok(())
-}
-
-/// A helper function that bootstraps the plist file to launchctl so the Job can run prior to
-/// system restart
-fn launchctl_bootstrap_astra(plist_path: &PathBuf, user_id: &str) -> Result<(), MacOSError> {
-    Command::new("launchctl")
-        .arg("bootstrap")
-        .arg(format!("gui/{user_id}"))
-        .arg(plist_path)
-        .output()
-        .map_err(|e| MacOSError::Launchctl(e.to_string()))?;
-    Ok(())
-}
-
-/// A helper function that bootouts the plit file from launchctl so the Job does not continue to
-/// run when user updates config file
-fn launchctl_bootout_astra(plist_path: &PathBuf, user_id: &str) -> Result<(), MacOSError> {
-    Command::new("launchctl")
-        .arg("bootout")
-        .arg(format!("gui/{user_id}"))
-        .arg(plist_path)
-        .output()
-        .map_err(|e| MacOSError::Launchctl(e.to_string()))?;
-    Ok(())
-}
-
-/// A helper function that gets the users current id
-///
-/// Errors:
-/// - Will error if user id command fails
-fn get_user_id() -> Result<String, MacOSError> {
-    let user_id_vec = Command::new("id")
-        .arg("-u")
-        .output()
-        .map_err(|e| MacOSError::OS(format!("unable to get user id: {e}")))?
-        .stdout;
-    let mut user_id = String::from_utf8_lossy(&user_id_vec).to_string();
-    user_id = user_id.trim().to_string();
-    Ok(user_id)
-}
-
-/// A helper function that generates the plist file path
-/// The path will be ~/Library/LaunchAgents/dev.CharlieKarafotias.astra.plist
-///
-/// # Errors
-/// - Will error is UserDirs is None. This should NEVER happen!
-fn gen_plist_path() -> Result<PathBuf, MacOSError> {
-    let mut path_to_astra_plist = UserDirs::new()
-        .ok_or(MacOSError::OS("home directory not defined".to_string()))?
-        .home_dir()
-        .to_path_buf();
-    path_to_astra_plist.push("Library");
-    path_to_astra_plist.push("LaunchAgents");
-    path_to_astra_plist.push(format!("{QUALIFIER}.{ORGANIZATION}.{APPLICATION}.plist"));
-    Ok(path_to_astra_plist)
-}
-
-/// A helper function to generate the contents of the astra program's plist file.
-/// The file contents is used by handle_frequency function to create/update the associated astra
-/// task in launchd
-///
-/// Resource: https://launchd.info/
-fn gen_plist_for_astra(frequency: &Frequency) -> Result<String, MacOSError> {
-    let curr_exe_path: String = std::env::current_exe()
-        .map_err(|_| MacOSError::OS("failed to derive current executable path".to_string()))?
-        .into_os_string()
-        .into_string()
-        .map_err(|_| MacOSError::StringConversion)?;
-    let file_contents = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
-<plist version=\"1.0\">
-    <dict>
-        <key>Label</key>
-        <string>{}.{}.{}</string>
-        <key>Program</key>
-        <string>{}</string>
-        <key>StartInterval</key>
-        <integer>{}</integer>
-        <key>RunAtLoad</key>
-        <true/>
-    </dict>
-</plist>",
-        QUALIFIER,
-        ORGANIZATION,
-        APPLICATION,
-        curr_exe_path,
-        frequency.to_seconds()
-    );
-    Ok(file_contents)
 }
 
 // --- OS specific code ---
@@ -360,43 +272,6 @@ fn get_key_value_pair_based_on_spaces<'a>(
 }
 
 // --- Helper functions ---
-
-// --- Errors ---
-#[derive(Debug, PartialEq)]
-pub enum MacOSError {
-    DarkModeError,
-    Launchctl(String),
-    MainDisplayNotFound,
-    OpenEditorError,
-    OS(String),
-    ResolutionNotFound,
-    StringConversion,
-    SystemProfilerError,
-}
-
-impl std::fmt::Display for MacOSError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MacOSError::DarkModeError => write!(f, "Unable to determine dark mode status"),
-            MacOSError::Launchctl(err_msg) => {
-                write!(f, "Launchctl error: {err_msg}")
-            }
-            MacOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
-            MacOSError::OpenEditorError => write!(f, "Unable to open editor"),
-            MacOSError::OS(err_msg) => write!(f, "General OS error: {err_msg}"),
-            MacOSError::ResolutionNotFound => {
-                write!(f, "Unable to determine resolution of main display")
-            }
-            MacOSError::StringConversion => write!(f, "Unable to convert to String"),
-            MacOSError::SystemProfilerError => {
-                write!(f, "Encountered error running system_profiler")
-            }
-        }
-    }
-}
-
-impl Error for MacOSError {}
-// --- Errors ---
 
 // --- Tests ---
 
