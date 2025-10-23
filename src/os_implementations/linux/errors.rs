@@ -4,6 +4,7 @@ use std::error::Error;
 pub enum LinuxOSError {
     CommandError(String),
     DarkModeError(String),
+    ExecutablePath(String),
     OpenEditorError,
     ParseError(String),
     ResolutionNotFound(String),
@@ -17,6 +18,12 @@ impl std::fmt::Display for LinuxOSError {
             }
             LinuxOSError::DarkModeError(err_msg) => {
                 write!(f, "Unable to determine dark mode status: {err_msg}")
+            }
+            LinuxOSError::ExecutablePath(err_msg) => {
+                write!(
+                    f,
+                    "Unable to determine path to current executable: {err_msg}"
+                )
             }
             LinuxOSError::OpenEditorError => {
                 write!(f, "Unable to open editor")
