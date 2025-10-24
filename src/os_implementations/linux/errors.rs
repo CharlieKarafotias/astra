@@ -5,9 +5,13 @@ pub enum LinuxOSError {
     CommandError(String),
     DarkModeError(String),
     ExecutablePath(String),
+    GenerateTimer(String),
     OpenEditorError,
+    Os(String),
     ParseError(String),
+    PathNotFound(String),
     ResolutionNotFound(String),
+    Write(String),
 }
 
 impl std::fmt::Display for LinuxOSError {
@@ -25,17 +29,29 @@ impl std::fmt::Display for LinuxOSError {
                     "Unable to determine path to current executable: {err_msg}"
                 )
             }
+            LinuxOSError::GenerateTimer(err_msg) => {
+                write!(f, "Unable to generate time file: {err_msg}")
+            }
             LinuxOSError::OpenEditorError => {
                 write!(f, "Unable to open editor")
             }
+            LinuxOSError::Os(err_msg) => {
+                write!(f, "OS error: {err_msg}")
+            }
             LinuxOSError::ParseError(err_msg) => {
                 write!(f, "Unable to parse output: {err_msg}")
+            }
+            LinuxOSError::PathNotFound(err_msg) => {
+                write!(f, "Unable to find path: {err_msg}")
             }
             LinuxOSError::ResolutionNotFound(err_msg) => {
                 write!(
                     f,
                     "Unable to determine resolution of main display: {err_msg}"
                 )
+            }
+            LinuxOSError::Write(err_msg) => {
+                write!(f, "Unable to write file: {err_msg}")
             }
         }
     }

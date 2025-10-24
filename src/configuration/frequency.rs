@@ -87,6 +87,54 @@ impl Frequency {
             _ => panic!("unrecognized frequency unit"),
         }
     }
+
+    /// A function used by Linux implementation to convert Frequency to [OnCalendar](https://man.archlinux.org/man/systemd.time.7#CALENDAR_EVENTS) format
+    pub fn as_on_calendar_format(&self) -> String {
+        match self.to_seconds() {
+            s if s < 60 => {
+                // Event N seconds
+                // ensure min interval of 1 to avoid OnCalendar error
+                format!("*-*-* *:*:0/{}", s.max(1))
+            }
+            s if s < 3600 => {
+                // Every N minutes
+                let minutes = s / 60;
+                format!("*-*-* *:0/{}", minutes.max(1))
+            }
+            s if s < 86400 => {
+                // Every N hours
+                let hours = s / 3600;
+                format!("*-*-* 0/{}:00:00", hours.max(1))
+            }
+            s if s < 604800 => {
+                // Every N days (up to 7 days)
+                let days = s / 86400;
+                format!("*-*-*/{} 00:00:00", days.max(1))
+            }
+            s if s < 2592000 => {
+                // Every N weeks
+                let weeks = s / 604800;
+                if weeks <= 1 {
+                    "weekly".to_string()
+                } else {
+                    format!("*-*-*/{} 00:00:00", weeks * 7)
+                }
+            }
+            s if s < 31536000 => {
+                // Every N months
+                let months = s / 2592000;
+                if months <= 1 {
+                    "monthly".to_string()
+                } else {
+                    // No direct month interval syntax, use days
+                    format!("*-*-*/{} 00:00:00", months * 30)
+                }
+            }
+            // NOTE: for linux, only support 1y. if user uses 2y for example will still change
+            // every year
+            _ => "yearly".to_string(),
+        }
+    }
 }
 
 impl Display for Frequency {
@@ -192,5 +240,51 @@ mod tests {
             )),
             f
         );
+    }
+
+    #[test]
+    fn test_frequency_to_on_calendar_fmt_seconds() {
+        let f = Frequency::new("10s").unwrap();
+        assert_eq!("*-*-* *:*:0/10".to_string(), f.as_on_calendar_format())
+    }
+    #[test]
+    fn test_frequency_to_on_calendar_fmt_minutes() {
+        let f = Frequency::new("15m").unwrap();
+        assert_eq!("*-*-* *:0/15".to_string(), f.as_on_calendar_format())
+    }
+    #[test]
+    fn test_frequency_to_on_calendar_fmt_hours() {
+        let f = Frequency::new("6h").unwrap();
+        assert_eq!("*-*-* 0/6:00:00".to_string(), f.as_on_calendar_format())
+    }
+    #[test]
+    fn test_frequency_to_on_calendar_fmt_days() {
+        let f = Frequency::new("2d").unwrap();
+        assert_eq!("*-*-*/2 00:00:00".to_string(), f.as_on_calendar_format())
+    }
+    #[test]
+    fn test_frequency_to_on_calendar_fmt_weeks() {
+        let f = Frequency::new("2w").unwrap();
+        assert_eq!("*-*-*/14 00:00:00".to_string(), f.as_on_calendar_format())
+    }
+    #[test]
+    fn test_frequency_to_on_calendar_fmt_one_month() {
+        let f = Frequency::new("1M").unwrap();
+        assert_eq!("monthly".to_string(), f.as_on_calendar_format())
+    }
+    #[test]
+    fn test_frequency_to_on_calendar_fmt_months() {
+        let f = Frequency::new("2M").unwrap();
+        assert_eq!("*-*-*/60 00:00:00".to_string(), f.as_on_calendar_format())
+    }
+    #[test]
+    fn test_frequency_to_on_calendar_fmt_one_year() {
+        let f = Frequency::new("1y").unwrap();
+        assert_eq!("yearly".to_string(), f.as_on_calendar_format())
+    }
+    #[test]
+    fn test_frequency_to_on_calendar_fmt_if_greater_than_one_year_go_to_yearly() {
+        let f = Frequency::new("2y").unwrap();
+        assert_eq!("yearly".to_string(), f.as_on_calendar_format())
     }
 }
