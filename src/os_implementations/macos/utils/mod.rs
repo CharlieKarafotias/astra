@@ -1,9 +1,6 @@
 use super::super::super::Config;
-use super::{
-    MacOSError, gen_plist_for_astra, gen_plist_path, launchctl_bootout_astra,
-    launchctl_bootstrap_astra,
-};
-use std::{env::var, fs, path::PathBuf, process::Command};
+use super::{MacOSError, install_astra_freq_with_launchctl, uninstall_astra_freq_from_launchctl};
+use std::{env::var, path::PathBuf, process::Command};
 
 // --- OS specific code ---
 
@@ -123,22 +120,10 @@ pub fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
 ///
 /// The job is defined in the User Agents location (~/Library/LaunchAgents/)
 pub fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
-    let path_to_astra_plist = gen_plist_path()?;
     if let Some(frequency) = config.frequency() {
-        let file_contents = gen_plist_for_astra(frequency)?;
-        // NOTE: - it is a known "issue" that you must turn off frequency first, run astra,
-        // then add new frequency update for launchctl to accept changes
-        fs::write(&path_to_astra_plist, file_contents).map_err(|err_msg| {
-            MacOSError::OS(format!("failed to create/update plist file: {err_msg}"))
-        })?;
-        launchctl_bootstrap_astra(&path_to_astra_plist)?;
+        install_astra_freq_with_launchctl(frequency)?;
     } else {
-        launchctl_bootout_astra(&path_to_astra_plist)?;
-        if path_to_astra_plist.exists() {
-            fs::remove_file(&path_to_astra_plist).map_err(|err_msg| {
-                MacOSError::OS(format!("failed to delete plist file: {err_msg}"))
-            })?;
-        }
+        uninstall_astra_freq_from_launchctl()?;
     }
     Ok(())
 }
