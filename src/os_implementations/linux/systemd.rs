@@ -29,10 +29,9 @@ ExecStart={}
 /// Generates a timer file to be used alongside the service file from gen_service_file().
 /// The timer file is based off the Frequency set by a user in their configuration file
 /// For details on timer files, see [Arch Linux page](https://wiki.archlinux.org/title/Systemd/Timers#Timer_units)
-fn gen_timer_file(f: Option<&Frequency>) -> Result<String, LinuxOSError> {
-    if let Some(freq) = f {
-        let file_content = format!(
-            "[Unit]
+fn gen_timer_file(f: &Frequency) -> Result<String, LinuxOSError> {
+    let file_content = format!(
+        "[Unit]
 Description=Run Astra Wallpaper on schedule
 
 [Timer]
@@ -42,14 +41,9 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 ",
-            freq.as_on_calendar_format()
-        );
-        Ok(file_content)
-    } else {
-        Err(LinuxOSError::GenerateTimer(
-            "Frequency must be defined in user configuration to generate a timer file".to_string(),
-        ))
-    }
+        f.as_on_calendar_format()
+    );
+    Ok(file_content)
 }
 
 /// Installs Astra service and timer units to systemd
@@ -59,18 +53,17 @@ WantedBy=timers.target
 ///  3. Add unit and timer filers to new folder in systemd/user
 ///  4. Run systemctl command to reload daemon
 ///  5. Run systemctl command to enable astra timer
-fn install_astra_service_and_timer(config: &Config) -> Result<(), LinuxOSError> {
+pub(in crate::os_implementations::linux) fn install_astra_service_and_timer(
+    frequency: &Frequency,
+) -> Result<(), LinuxOSError> {
     let systemd_dir = get_user_systemd_dir().ok_or_else(|| {
         LinuxOSError::PathNotFound("~/.config/systemd/user/ not found".to_string())
     })?;
     create_dir_all(&systemd_dir).map_err(|e| LinuxOSError::Os(e.to_string()))?;
     fs::write(systemd_dir.join("astra.service"), gen_service_file()?)
         .map_err(|e| LinuxOSError::Write(format!("astra.service file: {}", e.to_string())))?;
-    fs::write(
-        systemd_dir.join("astra.timer"),
-        gen_timer_file(config.frequency())?,
-    )
-    .map_err(|e| LinuxOSError::Write(format!("astra.timer file: {}", e.to_string())))?;
+    fs::write(systemd_dir.join("astra.timer"), gen_timer_file(frequency)?)
+        .map_err(|e| LinuxOSError::Write(format!("astra.timer file: {}", e.to_string())))?;
     Command::new("systemctl")
         .args(["--user", "daemon-reload"])
         .output()
@@ -91,7 +84,8 @@ fn install_astra_service_and_timer(config: &Config) -> Result<(), LinuxOSError> 
 ///  1. Run systemctl command to disable astra timer
 ///  2. Remove the service and timer files from systemd/user
 ///  3. Run systemctl command to reload daemon
-fn uninstall_astra_serivice_and_timer() -> Result<(), LinuxOSError> {
+pub(in crate::os_implementations::linux) fn uninstall_astra_serivice_and_timer()
+-> Result<(), LinuxOSError> {
     let systemd_dir = get_user_systemd_dir().ok_or_else(|| {
         LinuxOSError::PathNotFound("~/.config/systemd/user/ not found".to_string())
     })?;
