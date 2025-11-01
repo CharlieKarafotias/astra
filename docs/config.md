@@ -27,11 +27,11 @@ All configuration files must be written in **JSON**.
 
 Depending on the operating system, Astra searches for the configuration file in these locations:
 
-| OS       | Path                                                                        |
-|----------|-----------------------------------------------------------------------------|
-| Linux    | `$XDG_DATA_HOME/astra/config.json` or `$HOME/.config/astra/config.json`     |
-| macOS    | `$HOME/Library/Application Support/dev.CharlieKarafotias.Astra/config.json` |
-| Windows  | `{FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\config\config.json`      |
+| OS      | Path                                                                        |
+| ------- | --------------------------------------------------------------------------- |
+| Linux   | `$XDG_DATA_HOME/astra/config.json` or `$HOME/.config/astra/config.json`     |
+| macOS   | `$HOME/Library/Application Support/dev.CharlieKarafotias.Astra/config.json` |
+| Windows | `{FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\config\config.json`      |
 
 _Astra uses the [`directories`](https://lib.rs/crates/directories) crate to determine these standard paths._
 
@@ -40,6 +40,7 @@ _Astra uses the [`directories`](https://lib.rs/crates/directories) crate to dete
 ## General Settings
 
 ### `auto_clean`
+
 If defined, Astra will automatically remove any wallpapers in its cache directory that are older than the specified time.
 Units include seconds (`s`), minutes (`m`), hours (`h`), days (`d`), weeks (`w`), months (`M`), and years (`y`).
 
@@ -51,6 +52,7 @@ Units include seconds (`s`), minutes (`m`), hours (`h`), days (`d`), weeks (`w`)
 ---
 
 ### `frequency`
+
 Controls how often Astra automatically updates your wallpaper.  
 Units include seconds (`s`), minutes (`m`), hours (`h`), days (`d`), weeks (`w`), months (`M`), and years (`y`).
 
@@ -62,6 +64,7 @@ Units include seconds (`s`), minutes (`m`), hours (`h`), days (`d`), weeks (`w`)
 ---
 
 ### `generators`
+
 A list of wallpaper generators to choose from when `astra` runs. If multiple generators are listed, Astra will select one at random.
 
 **Type:** array  
@@ -76,6 +79,7 @@ A list of wallpaper generators to choose from when `astra` runs. If multiple gen
 Controls specific to the Julia fractal generator.
 
 ### `julia_gen.appearance`
+
 Preferred color appearance mode.
 
 **Type:** string  
@@ -86,6 +90,7 @@ Preferred color appearance mode.
 ---
 
 ### `julia_gen.complex_numbers`
+
 List of complex numbers used to generate fractals.  
 If multiple are provided, one will be selected randomly.
 
@@ -97,6 +102,7 @@ If multiple are provided, one will be selected randomly.
 ---
 
 ### `julia_gen.starting_sample_threshold`
+
 Defines the starting color intensity threshold for sampling points.  
 Higher values generally increase color variety.
 
@@ -108,6 +114,7 @@ Higher values generally increase color variety.
 ---
 
 ### `julia_gen.respect_color_themes`
+
 If `true`, the Julia generator will attempt to use user-defined color themes.
 
 **Type:** boolean  
@@ -121,6 +128,7 @@ If `true`, the Julia generator will attempt to use user-defined color themes.
 Controls the generator that creates solid-color wallpapers.
 
 ### `solid_gen.preferred_default_colors`
+
 A list of named colors from Astra’s predefined palette.  
 If multiple are listed, one will be selected randomly.
 
@@ -132,6 +140,7 @@ If multiple are listed, one will be selected randomly.
 ---
 
 ### `solid_gen.preferred_rgb_colors`
+
 List of RGB colors to choose from.  
 Each value must be an array of three numbers between 0 and 255.
 
@@ -142,6 +151,7 @@ Each value must be an array of three numbers between 0 and 255.
 ---
 
 ### `solid_gen.respect_color_themes`
+
 When `true`, Astra will adjust solid colors to match user-defined themes.
 
 **Type:** boolean  
@@ -155,6 +165,7 @@ When `true`, Astra will adjust solid colors to match user-defined themes.
 Controls wallpapers fetched from Microsoft’s Bing Spotlight service.
 
 ### `spotlight_gen.country`
+
 Specifies which country’s spotlight feed to use.
 
 **Type:** string  
@@ -165,6 +176,7 @@ Specifies which country’s spotlight feed to use.
 ---
 
 ### `spotlight_gen.locale`
+
 Specifies a locale variant, if supported for the given country.
 
 **Type:** string  
@@ -175,6 +187,7 @@ Specifies a locale variant, if supported for the given country.
 ---
 
 ### `spotlight_gen.respect_color_themes`
+
 When `true`, Astra analyzes candidate spotlight images and selects one matching your color themes.
 
 **Type:** boolean  
@@ -188,26 +201,36 @@ When `true`, Astra analyzes candidate spotlight images and selects one matching 
 Custom color themes allow generators to create images that match a consistent aesthetic.
 
 ### `themes`
+
 Contains a list of theme objects. Each theme defines a name and color palettes.
 
 **Type:** array of objects  
 **Example:**
+
 ```json
 {
   "themes": [
     {
       "name": "My new theme",
-      "colors": [[0, 0, 0], [255, 255, 255]],
-      "dark_mode_colors": [[0, 0, 0], [255, 255, 255]]
+      "colors": [
+        [0, 0, 0],
+        [255, 255, 255]
+      ],
+      "dark_mode_colors": [
+        [0, 0, 0],
+        [255, 255, 255]
+      ]
     }
   ]
 }
 ```
+
 **Default:** Generators use built-in colors when no themes are provided.
 
 ---
 
 ### `theme.name`
+
 A theme’s display name.
 
 **Type:** string  
@@ -218,6 +241,7 @@ A theme’s display name.
 ---
 
 ### `theme.colors`
+
 List of RGB color arrays used for light mode or general contexts.
 
 **Type:** array of arrays `[r, g, b]`  
@@ -227,6 +251,7 @@ List of RGB color arrays used for light mode or general contexts.
 ---
 
 ### `theme.dark_mode_colors`
+
 Optional array of RGB color arrays used when dark mode is active.
 
 **Type:** array of arrays `[r, g, b]`  
@@ -239,8 +264,18 @@ Optional array of RGB color arrays used when dark mode is active.
 
 When modifying the `frequency` key on macOS, follow these steps to ensure the system daemon reloads properly:
 
-1. Remove the `frequency` key from your configuration file.  
-2. Run `astra` once to unload the background service.  
+1. Remove the `frequency` key from your configuration file.
+2. Run `astra` once to unload the background service.
 3. Add `frequency` back to the file with your new desired value.
+
+## Windows Configuration Notes
+
+When modifying the `frequency` key on Windows, note that everytime the system runs astra automatically, a cmd window will flash. This is astra running as the user.
+
+Further, note there are a few limitations on Windows for frequency:
+
+1. Setting frequency between `1s` and `60s` will become `1m` on Windows due to schtasks limitation.
+2. Setting frequency with to some seconds like `90s` will convert to minutes and round (this will be `1m` on Windows).
+3. Setting frequency to anything above a year will change to `12m` as schtasks does not support higher than 1 year.
 
 ---
