@@ -33,6 +33,8 @@ pub(in crate::os_implementations::windows) fn install_astra_task(
     Ok(())
 }
 
+/// Uninstalls astra task when user config removes the frequency
+/// [schtasks doc](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-delete)
 pub(in crate::os_implementations::windows) fn uninstall_astra_task() -> Result<(), WindowsError> {
     Command::new("schtasks")
         .args([
