@@ -2,6 +2,29 @@ use super::config::ConfigError;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter};
 
+/// Enum for all schedule type options supported by schtasks in Windows systems
+/// See [docs](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks-create)
+#[derive(Debug, PartialEq)]
+pub enum ScheduleType {
+    MINUTE,
+    HOURLY,
+    DAILY,
+    WEEKLY,
+    MONTHLY,
+}
+impl Display for ScheduleType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            ScheduleType::MINUTE => "MINUTE",
+            ScheduleType::HOURLY => "HOURLY",
+            ScheduleType::DAILY => "DAILY",
+            ScheduleType::WEEKLY => "WEEKLY",
+            ScheduleType::MONTHLY => "MONTHLY",
+        };
+        write!(f, "{}", str)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Frequency(String);
 
@@ -31,6 +54,12 @@ impl Frequency {
                             && !c.is_numeric()
                             && !parsed.is_empty()
                         {
+                            // If parsed is only 0, then fail
+                            if parsed == "0" {
+                                return Err(ConfigError::Parse(
+                                    "frequency number can't be 0".to_string(),
+                                ));
+                            }
                             mode = Mode::Unit;
                         }
                     }
@@ -67,7 +96,7 @@ impl Frequency {
         Ok(Frequency(parsed.to_string()))
     }
 
-    pub fn to_seconds(&self) -> u64 {
+    fn split_string_to_num_and_unit(&self) -> (u64, char) {
         let num = self.0[..self.0.len() - 1]
             .parse::<u64>()
             .expect("frequency must start with a number");
@@ -76,6 +105,11 @@ impl Frequency {
             .chars()
             .last()
             .expect("frequency must end with a unit");
+        (num, unit)
+    }
+
+    pub fn to_seconds(&self) -> u64 {
+        let (num, unit) = self.split_string_to_num_and_unit();
         match unit {
             's' => num,
             'm' => num * 60,
@@ -85,6 +119,78 @@ impl Frequency {
             'M' => num * 60 * 60 * 24 * 30,
             'y' => num * 60 * 60 * 24 * 365,
             _ => panic!("unrecognized frequency unit"),
+        }
+    }
+
+    /// A function used by Windows implementation to converty Frequency to schtask friendly format.
+    pub fn as_task_scheduler_components(&self) -> (u32, ScheduleType) {
+        let (mut num, mut unit) = self.split_string_to_num_and_unit();
+        // NOTE: loop used to support rematch if unit changes in process of matching
+        loop {
+            match unit {
+                's' => {
+                    // NOTE: Windows only supports MINUTE and higher, thus if under 60s, round up to 1m
+                    if num < 60 {
+                        return (1, ScheduleType::MINUTE);
+                    }
+                    if 60 * num < 1440 {
+                        return (num as u32, ScheduleType::MINUTE);
+                    }
+                    // NOTE: Windows only supports num (modifer) between range 1-1439 minutes (~24hrs).
+                    // Therefore if higher than 1439, bump unit up to DAILY and continue
+                    if 60 * num > 1439 {
+                        num /= 60 * 60 * 24;
+                        unit = 'd';
+                    }
+                }
+                'm' => {
+                    if num < 1440 {
+                        return (num as u32, ScheduleType::MINUTE);
+                    }
+                    num /= 60 * 24;
+                    unit = 'd';
+                }
+                'h' => {
+                    // NOTE: Windows only supports HOURLY between range 1-23. Therefore if higher
+                    // convert to DAILY and continue
+                    if num < 24 {
+                        return (num as u32, ScheduleType::HOURLY);
+                    }
+                    num /= 24;
+                    unit = 'd';
+                }
+                'd' => {
+                    // NOTE: Windows only supports DAILY between range 1-365. Therefore higher goes
+                    // to year
+                    if num < 366 {
+                        return (num as u32, ScheduleType::DAILY);
+                    }
+                    num /= 365;
+                    unit = 'y';
+                }
+                'w' => {
+                    // NOTE: Windows only supports WEEKLY between range 1-52. If higher, go to year
+                    if num < 53 {
+                        return (num as u32, ScheduleType::WEEKLY);
+                    }
+                    num /= 52;
+                    unit = 'y';
+                }
+                'M' => {
+                    // NOTE: Windows only supports MONTHLY between 1-12. if higher, go to year
+                    if num < 13 {
+                        return (num as u32, ScheduleType::MONTHLY);
+                    }
+                    num /= 12;
+                    unit = 'y';
+                }
+                'y' => {
+                    // NOTE: If landed in yearly, default to run astra once every 12 months. Can't go longer
+                    // than that
+                    return (12, ScheduleType::MONTHLY);
+                }
+                _ => panic!("unrecognized frequency unit"),
+            }
         }
     }
 
@@ -204,6 +310,17 @@ mod tests {
     }
 
     #[test]
+    fn test_frequency_parse_0_used_as_numeric() {
+        let f = Frequency::new("0d");
+        assert_eq!(
+            Err(ConfigError::Parse(
+                "frequency number can't be 0".to_string()
+            )),
+            f
+        );
+    }
+
+    #[test]
     fn test_frequency_parse_unknown_unit_format() {
         let f = Frequency::new("1K");
         assert_eq!(Err(ConfigError::Parse("unrecognized frequency unit, supported units are: seconds(s), minutes(m), hours(h), days(d), weeks(w), months(M), years(y)".to_string())), f);
@@ -286,5 +403,96 @@ mod tests {
     fn test_frequency_to_on_calendar_fmt_if_greater_than_one_year_go_to_yearly() {
         let f = Frequency::new("2y").unwrap();
         assert_eq!("yearly".to_string(), f.as_on_calendar_format())
+    }
+    #[test]
+    fn test_as_task_scheduler_components_10_sec_should_round_to_1_min() {
+        let f = Frequency::new("10s").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (1, ScheduleType::MINUTE);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_1m_should_be_1m() {
+        let f = Frequency::new("1m").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (1, ScheduleType::MINUTE);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_100m_should_be_100m() {
+        let f = Frequency::new("100m").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (100, ScheduleType::MINUTE);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_1439_min_within_bounds() {
+        let f = Frequency::new("1439m").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (1439, ScheduleType::MINUTE);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_1440_min_should_convert_to_1d() {
+        let f = Frequency::new("1440m").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (1, ScheduleType::DAILY);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_20h_within_bounds() {
+        let f = Frequency::new("20h").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (20, ScheduleType::HOURLY);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_74h_should_be_3d() {
+        let f = Frequency::new("74h").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (3, ScheduleType::DAILY);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_365d_within_bounds() {
+        let f = Frequency::new("365d").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (365, ScheduleType::DAILY);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_720d_should_be_12_monthly() {
+        let f = Frequency::new("720d").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (12, ScheduleType::MONTHLY);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_6w_within_bounds() {
+        let f = Frequency::new("6w").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (6, ScheduleType::WEEKLY);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_53w_should_be_12_monthly() {
+        let f = Frequency::new("53w").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (12, ScheduleType::MONTHLY);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_6_months_should_be_6_monthly() {
+        let f = Frequency::new("6M").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (6, ScheduleType::MONTHLY);
+        assert_eq!(expected, actual)
+    }
+    #[test]
+    fn test_as_task_scheduler_components_13_months_should_be_12_monthly() {
+        let f = Frequency::new("13M").unwrap();
+        let actual = f.as_task_scheduler_components();
+        let expected = (12, ScheduleType::MONTHLY);
+        assert_eq!(expected, actual)
     }
 }

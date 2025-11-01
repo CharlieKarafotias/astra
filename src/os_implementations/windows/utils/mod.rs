@@ -1,5 +1,5 @@
 use super::super::super::Config;
-use super::WindowsError;
+use super::{WindowsError, install_astra_task, uninstall_astra_task};
 use std::{
     os::{raw::c_void, windows::ffi::OsStrExt},
     path::PathBuf,
@@ -104,5 +104,10 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsE
 /// - IF key/value is defined, take the frequency and ensure astra task is created/updated
 /// - IF key/value is not defined, ensure astra task is removed from scheduled tasks
 pub(crate) fn handle_frequency(config: &Config) -> Result<(), WindowsError> {
-    todo!("v1.1.0 - implement handle frequency using task_scheduler module")
+    if let Some(frequency) = config.frequency() {
+        install_astra_task(frequency)?;
+    } else {
+        uninstall_astra_task()?;
+    }
+    Ok(())
 }
