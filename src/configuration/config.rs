@@ -170,7 +170,8 @@ impl Config {
     }
 
     fn read_config_file(path: &Path, verbose: bool) -> Result<UserConfig, ConfigError> {
-        // TODO v1.1.0 - if part of config fails, see if you can partially read. Right now if part is wrong, it respects nothing and defaults to old behavior
+        // TODO: find way to partially process config and report err instead of current impl
+        // (ignores all of user config)
         match fs::read_to_string(path) {
             Ok(data) => {
                 Ok(serde_json::from_str(&data).map_err(|e| ConfigError::Parse(e.to_string())))?

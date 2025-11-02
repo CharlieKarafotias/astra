@@ -7,11 +7,10 @@ pub struct JuliaConfig {
     complex_numbers: Option<Vec<(f64, f64)>>,
     // Iterations required to become a hotspot (higher = more detailed)
     starting_sample_threshold: Option<u8>,
-    // TODO v1.1.0: generate in color range if themes defined
     respect_color_themes: Option<bool>,
 }
 
-// TODO v1.1.0: relocate to color_themes
+// TODO: relocate to color_themes
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
 pub(crate) enum Appearance {
     Auto,

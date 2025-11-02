@@ -7,7 +7,6 @@ pub struct SolidConfig {
     preferred_default_colors: Option<Vec<Color>>,
     preferred_rgb_colors: Option<Vec<(u8, u8, u8)>>,
     // If true, ignore above fields
-    // TODO v1.1.0: generate in color range if themes defined (provide escape hatch in solid config)
     respect_color_themes: Option<bool>,
 }
 

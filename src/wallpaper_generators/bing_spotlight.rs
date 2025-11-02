@@ -62,7 +62,7 @@ pub fn generate_bing_spotlight(config: &Config) -> Result<AstraImage, WallpaperG
     let download_links = get_image_download_urls(
         config,
         APIParams {
-            // TODO: v1.1.0 - this could be 2-4, maybe count could be config option as 4 could be slow due to blocking calls
+            // TODO: could be a user_config preference (compare w/ >2 images)
             count: if respect_theme && has_user_defined_color_themes {
                 2
             } else {
@@ -109,7 +109,6 @@ pub fn generate_bing_spotlight(config: &Config) -> Result<AstraImage, WallpaperG
     Ok(selected_image)
 }
 
-// TODO: add func comment & tests below
 fn compute_user_theme_averages(config: &Config) -> Result<Vec<[u8; 3]>, WallpaperGeneratorError> {
     let user_themes = config
         .themes()
@@ -186,7 +185,6 @@ fn download_image_to_memory(
     Ok(image)
 }
 
-// TODO: v1.1.0 - add func comments
 fn get_image_download_urls(
     config: &Config,
     params: APIParams,
@@ -219,8 +217,6 @@ fn get_image_download_urls(
     Ok(urls)
 }
 
-// TODO: v1.1.0 - add func comments
-// TODO: v1.1.0 - add tests
 fn build_url(params: APIParams) -> String {
     format!(
         "https://fd.api.iris.microsoft.com/v4/api/selection?&placement=88000820&fmt=json&bcnt={count}&country={country}&locale={locale}",

@@ -6,7 +6,6 @@ use std::fmt::{Display, Formatter, Write};
 pub struct SpotlightConfig {
     country: Option<String>,
     locale: Option<String>,
-    // TODO v1.1.0 - not sure if this is worth it, can pull <= 4 images at a time and check closest matching theme
     respect_color_themes: Option<bool>,
 }
 
