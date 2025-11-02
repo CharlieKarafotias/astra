@@ -1,11 +1,17 @@
-use std::{error::Error, fmt::Display, path::PathBuf, process::Command};
+use super::super::super::Config;
+use super::{LinuxOSError, install_astra_service_and_timer, uninstall_astra_serivice_and_timer};
+use std::{
+    env::var,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 // --- OS specific code ---
 /// Checks if the user's OS is currently in dark mode
 ///
 /// Tested on:
 ///   - Ubuntu 25.04 with Gnome Desktop
-pub(crate) fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
+pub fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
     // TODO: add support for other linux distros (non gnome based)
     let output = Command::new("gsettings")
         .arg("get")
@@ -27,7 +33,7 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
 /// Returns a `LinuxOSError` with the `ResolutionNotFound` variant if the command to determine
 /// screen resolution cannot be executed. It can also return an error if the output
 /// cannot be parsed.
-pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
+pub fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
     // First, get the primary display name
     let output = Command::new("xrandr")
         .arg("--current")
@@ -72,7 +78,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), LinuxOSError> {
 ///
 /// Returns a `LinuxOSError` with the `CommandError` variant if the `gsettings` command
 /// cannot be executed.
-pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
+pub fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
     // TODO: add support for other linux distros (non gnome based)
     let picture_uri_arg = if is_dark_mode_active()? {
         "picture-uri-dark"
@@ -89,56 +95,42 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), LinuxOSError> {
     Ok(())
 }
 
-/// Returns the path to the user's desktop folder. This relies on the `xdg-user-dir` command to
-/// determine the path.
+/// Opens the given file in the user's default editor.
+/// This function will first check the `EDITOR` environment variable, and if it is not set,
+/// it will default to using `vim`.
 ///
 /// # Errors
-///
-/// Returns a `LinuxOSError` with the `CommandError` variant if the `xdg-user-dir` command
-/// cannot be executed.
-pub(crate) fn path_to_desktop_folder() -> Result<PathBuf, LinuxOSError> {
-    let output = Command::new("xdg-user-dir")
-        .arg("DESKTOP")
-        .output()
-        .map_err(|e| LinuxOSError::CommandError(e.to_string()))?;
-    let desktop_path = String::from_utf8_lossy(&output.stdout);
-    Ok(PathBuf::from(desktop_path.trim()))
-}
-// --- OS specific code ---
+/// - Returns a `LinuxOSError` with the `OpenEditorError` variant if the command to open the
+/// file cannot be executed for any reason.
+pub fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSError> {
+    let editor = var("EDITOR").unwrap_or("vim".to_string());
+    config.print_if_verbose(&format!("Using editor: {}", editor));
+    let status = Command::new(&editor)
+        .arg(path)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .map_err(|_| LinuxOSError::OpenEditorError)?;
 
-// --- Helper functions ---
-// --- Helper functions ---
-
-// --- Errors ---
-#[derive(Debug, PartialEq)]
-pub enum LinuxOSError {
-    CommandError(String),
-    DarkModeError(String),
-    ParseError(String),
-    ResolutionNotFound(String),
-}
-
-impl Display for LinuxOSError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LinuxOSError::CommandError(err_msg) => {
-                write!(f, "Unable to execute command: {err_msg}")
-            }
-            LinuxOSError::DarkModeError(err_msg) => {
-                write!(f, "Unable to determine dark mode status: {err_msg}")
-            }
-            LinuxOSError::ParseError(err_msg) => {
-                write!(f, "Unable to parse output: {err_msg}")
-            }
-            LinuxOSError::ResolutionNotFound(err_msg) => {
-                write!(
-                    f,
-                    "Unable to determine resolution of main display: {err_msg}"
-                )
-            }
-        }
+    if !status.success() {
+        return Err(LinuxOSError::OpenEditorError);
     }
+    Ok(())
 }
 
-impl Error for LinuxOSError {}
-// --- Errors ---
+/// CRUD operator function for interfacing with systemd system in Linux
+///
+/// This function takes in the configuration struct and checks if user config contains a frequency
+/// key/value.
+///
+/// - If key/value is defined, take the frequency and ensure astra service/timer is created/updated
+/// - If key/value is not defined, ensure the astra service/timer file is deleted (if it exists)
+pub fn handle_frequency(config: &Config) -> Result<(), LinuxOSError> {
+    if let Some(frequency) = config.frequency() {
+        install_astra_service_and_timer(frequency)?;
+    } else {
+        uninstall_astra_serivice_and_timer()?;
+    }
+    Ok(())
+}

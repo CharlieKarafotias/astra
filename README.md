@@ -106,6 +106,28 @@ astra clean
 astra --help
 ```
 
+### ⚙️ Configuration File
+
+Astra supports an optional JSON configuration file that allows you to customize
+its behavior without needing to pass flags or subcommands every time. This file
+can be placed at a standard location depending on your OS (see below) and will
+be automatically loaded when the `astra` command runs.
+
+#### Standard Location For File Based On OS
+
+| OS      | Standard Location                                                          |
+|---------|----------------------------------------------------------------------------|
+| Linux   | \$XDG_DATA_HOME/astra/config.json                                          |
+|         | \$HOME/.config/astra/config.json                                           |
+| macOS   | \$HOME/Library/Application Support/dev.CharlieKarafotias.Astra/config.json |
+| Windows | {FOLDERID_RoamingAppData}\CharlieKarafotias\Astra\config\config.json       |
+
+_Astra uses the [`directories`](https://lib.rs/crates/directories) crate for this functionality_
+
+#### Supported Configuration Keys
+
+Check out [docs/config.md](./docs/config.md) file for all supported keys.
+
 ## 🤝 Contributing
 
 Contributions are welcome! Reach out to [Charlie Karafotias](https://github.com/CharlieKarafotias) for how to contribute.
@@ -116,6 +138,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
+- [Julia Set Wikipedia Page](https://en.wikipedia.org/wiki/Julia_set) for providing background information & mathematical equations
 - [ORelio's Splotlight-Downloader project](https://github.com/ORelio/Spotlight-Downloader/blob/master/SpotlightAPI.md) for the detailed Spotlight API documentation
 
 ### Developed by [Charlie Karafotias](https://github.com/CharlieKarafotias)

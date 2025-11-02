@@ -1,6 +1,6 @@
 [package]
 name = "astra"
-version = "1.0.3"
+version = "1.1.0"
 license = "MIT"
 edition = "2024"
 repository = "https://github.com/CharlieKarafotias/astra"
@@ -8,18 +8,19 @@ authors = ["Charlie Karafotias <cnkara2023@gmail.com>"]
 description = "A tool for generating wallpaper images"
 
 [dependencies]
-clap = { version = "4.5.41", features = ["derive"] }
-clap_complete = "4.5.55"
-image = { version = "0.25.6", features = ["png", "rayon"] }
+clap = { version = "4.5.51", features = ["derive"] }
+clap_complete = "4.5.60"
+directories = "6.0.0"
+image = { version = "0.25.8", features = ["png", "rayon"] }
 num-complex = { version = "0.4.6", features = ["std"] }
 rand = "0.9.2"
-rayon = "1.10.0"
-reqwest = { version = "0.12.22", features = ["blocking", "json"] }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.141"
+rayon = "1.11.0"
+reqwest = { version = "0.12.24", features = ["blocking", "json"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61.3", features = [
+windows = { version = "0.62.2", features = [
     "Win32",
     "Win32_System",
     "Win32_System_Registry",
@@ -27,3 +28,6 @@ windows = { version = "0.61.3", features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Shell",
 ] }
+
+[dev-dependencies]
+tempfile = "3.23.0"

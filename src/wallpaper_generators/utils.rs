@@ -1,37 +1,44 @@
-use super::super::cli::Config;
-use super::super::os_implementations::path_to_desktop_folder;
+use super::super::{
+    configuration::{Config, Frequency},
+    constants::{APPLICATION, ORGANIZATION, QUALIFIER},
+};
+use crate::cli::Generator;
+use crate::os_implementations::update_wallpaper;
+use directories::ProjectDirs;
 use image::{ImageBuffer, Rgb};
-use std::fs::{read_dir, remove_dir_all, remove_file};
 use std::{
     error::Error,
-    fs::create_dir_all,
+    fmt,
+    fs::{create_dir_all, read_dir, remove_dir_all, remove_file},
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 pub type AstraImage = ImageBuffer<Rgb<u8>, Vec<u8>>;
 
-/// Creates a folder named "astra_wallpapers" on the desktop.
+/// Creates a folder named "wallpapers" under the data_dir folder of Astra.
+/// For each path, see: https://lib.rs/crates/directories
 ///
 /// # Returns
 ///
 /// A `Result` containing the path to the created folder on success, or a
 /// `WallpaperGeneratorError` on failure.
 pub(super) fn create_wallpaper_folder() -> Result<PathBuf, WallpaperGeneratorError> {
-    let path = path_to_desktop_folder()
-        .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
-        .join("astra_wallpapers");
-    create_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+    let proj_dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        .ok_or_else(|| WallpaperGeneratorError::OS("could not derive data_dir".to_string()))?;
+    let path = proj_dirs.data_dir().join("Wallpapers");
+    create_dir_all(&path).map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
     Ok(path)
 }
 
-/// Deletes wallpapers from the "astra_wallpapers" folder.
+/// Deletes wallpapers from the "wallpapers" folder.
+/// For each path, see: https://lib.rs/crates/directories
 ///
 /// # Arguments
 ///
 /// * `delete_all` - If true, deletes all wallpapers and the "astra_wallpapers" folder.
 /// * `delete_dir` - If true, deletes the "astra_wallpapers" folder.
-/// * `older_than_in_days` - If set, deletes wallpapers older than the specified number of days.
+/// * `older_than` - If set, deletes wallpapers older than the specified frequency.
 ///
 /// # Returns
 ///
@@ -40,14 +47,16 @@ pub fn delete_wallpapers(
     config: &Config,
     delete_all: bool,
     delete_dir: bool,
-    older_than_in_days: Option<u64>,
+    older_than: Option<&Frequency>,
 ) -> Result<(), WallpaperGeneratorError> {
-    let path = path_to_desktop_folder()
-        .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
-        .join("astra_wallpapers");
+    let path = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        .map(|dirs| dirs.data_dir().join("Wallpapers"))
+        .ok_or_else(|| {
+            WallpaperGeneratorError::OS("could not derive wallpapers path".to_string())
+        })?;
     config.print_if_verbose(format!("Deleting wallpapers from {}", path.display()).as_str());
     if delete_dir {
-        remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
         config.print_if_verbose(
             format!(
                 "Deleted all images and directory {} successfully",
@@ -56,8 +65,8 @@ pub fn delete_wallpapers(
             .as_str(),
         );
     } else if delete_all {
-        remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
-        create_wallpaper_folder().map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
+        create_wallpaper_folder().map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
         config.print_if_verbose(
             format!(
                 "Deleted all images from directory {} successfully",
@@ -65,45 +74,68 @@ pub fn delete_wallpapers(
             )
             .as_str(),
         );
-    } else {
-        if let Some(days) = older_than_in_days {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
-                .as_secs();
-            let older_than_sec = days * 24 * 60 * 60;
-            let oldest_timestamp_to_keep = now - older_than_sec;
-            for entry in
-                read_dir(&path).map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?
-            {
-                let entry = entry.map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
-                let file_name = entry.file_name().to_string_lossy().to_string();
-                // string like spotlight_1640000000.png
-                let timestamp_str = &file_name
-                    [file_name.rfind('_').map(|i| i + 1).unwrap_or(0)..file_name.len() - 4];
-                match timestamp_str.parse::<u64>() {
-                    Ok(timestamp) => {
-                        if timestamp < oldest_timestamp_to_keep {
-                            remove_file(entry.path())
-                                .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
-                            config.print_if_verbose(
-                                format!("Deleted image {} successfully", entry.path().display())
-                                    .as_str(),
-                            );
-                        }
+    } else if let Some(frequency) = older_than {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?
+            .as_secs();
+        let older_than_sec = frequency.to_seconds();
+        config.print_if_verbose(format!("Deleting images older than {}", &frequency).as_str());
+        let oldest_timestamp_to_keep = now - older_than_sec;
+        for entry in read_dir(&path).map_err(|e| WallpaperGeneratorError::OS(e.to_string()))? {
+            let entry = entry.map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            // string like spotlight_1640000000.png
+            let timestamp_str =
+                &file_name[file_name.rfind('_').map(|i| i + 1).unwrap_or(0)..file_name.len() - 4];
+            match timestamp_str.parse::<u64>() {
+                Ok(timestamp) => {
+                    if timestamp < oldest_timestamp_to_keep {
+                        remove_file(entry.path())
+                            .map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
+                        config.print_if_verbose(
+                            format!("Deleted image {} successfully", entry.path().display())
+                                .as_str(),
+                        );
                     }
-                    Err(_) => {
-                        config.print_if_verbose(format!(
-                            "ERROR: Encountered file that is not an astra formatted image, skipping file... {}",
-                            entry.path().display()
-                        ).as_str());
-                        continue;
-                    }
-                };
-            }
+                }
+                Err(_) => {
+                    config.print_if_verbose(format!(
+                        "ERROR: Encountered file that is not an astra formatted image, skipping file... {}",
+                        entry.path().display()
+                    ).as_str());
+                    continue;
+                }
+            };
         }
     }
 
+    Ok(())
+}
+
+pub fn handle_generate_options(
+    config: &Config,
+    image_buf: &AstraImage,
+    image: &Generator,
+    no_save: bool,
+    no_update: bool,
+) -> Result<(), Box<dyn Error>> {
+    // Handle options
+    if !no_update {
+        config.print_if_verbose(
+            "NOTE: to update wallpaper, astra must save the image to astra_wallpapers folder.",
+        );
+        // Updating requires a saved image
+        let saved_image_path = save_image(config, image, image_buf)?;
+        // TODO: move verbose logs into OS implementations of update_wallpaper
+        config.print_if_verbose("Updating wallpaper...");
+        update_wallpaper(saved_image_path)?;
+        config.print_if_verbose("Updated wallpaper");
+    }
+    // If no_update == false, we already saved the image as its required to update wallpaper
+    if no_update && !no_save {
+        let _ = save_image(config, image, image_buf)?;
+    }
     Ok(())
 }
 
@@ -123,7 +155,7 @@ pub(super) enum Operator {
 /// # Returns
 ///
 /// A vector of color map entries.
-pub(super) fn create_color_map(op: Operator, steps: usize, colors: &Vec<[u8; 3]>) -> Vec<[u8; 3]> {
+pub(super) fn create_color_map(op: Operator, steps: usize, colors: &[[u8; 3]]) -> Vec<[u8; 3]> {
     let mut color_map = Vec::with_capacity(steps);
     match op {
         Operator::Gradient => {
@@ -187,7 +219,7 @@ fn mix_color(color1: [u8; 3], color2: [u8; 3], weight_color_2: f64) -> [u8; 3] {
 /// `WallpaperGeneratorError` on failure.
 pub fn save_image(
     config: &Config,
-    prefix: &str,
+    generator: &Generator,
     image: &AstraImage,
 ) -> Result<PathBuf, WallpaperGeneratorError> {
     config.print_if_verbose("Saving image to astra_wallpapers folder...");
@@ -195,13 +227,19 @@ pub fn save_image(
 
     let time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| WallpaperGeneratorError::OSError(e.to_string()))?;
+        .map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
 
-    save_path = save_path.join(format!("{prefix}_{}.png", time.as_secs().to_string()));
+    save_path = save_path.join(format!("{}_{}.png", generator.prefix(), time.as_secs()));
     image
         .save(&save_path)
-        .map_err(|_| WallpaperGeneratorError::ImageSaveError)?;
-    config.print_if_verbose("Image saved to astra_wallpapers folder");
+        .map_err(|_| WallpaperGeneratorError::ImageSave)?;
+    config.print_if_verbose(
+        format!(
+            "Image saved to astra_wallpapers folder: {}",
+            save_path.display()
+        )
+        .as_str(),
+    );
     Ok(save_path)
 }
 
@@ -241,47 +279,67 @@ pub(super) fn scale_image(
     let y_start = focus_pt.1 - (scaled_y_range / 2.0);
     (scaled_x_range, scaled_y_range, x_start, y_start)
 }
+
+/// Calculates the average color of the image.
+///
+/// Reference https://stackoverflow.com/questions/649454/what-is-the-best-way-to-average-two-colors-that-define-a-linear-gradient
+/// Formula:
+///
+/// `(r_avg, g_avg, b_avg) = (sqrt((R_0^2 + ... + R_n^2) / n), sqrt((G_0^2 + ... + G_n^2) / n), sqrt((B_0^2 + ... + B_n^2) / n))`
+///
+/// # Arguments
+///
+/// * `image` - The image to calculate the average color of.
+///
+/// # Returns
+///
+/// The average color of the image.
+pub fn average_color(image: &AstraImage) -> Rgb<u8> {
+    let mut rgb_avg = (0.0, 0.0, 0.0);
+    image.pixels().for_each(|color| {
+        let r = color[0] as f64;
+        let g = color[1] as f64;
+        let b = color[2] as f64;
+        rgb_avg.0 += r.powi(2);
+        rgb_avg.1 += g.powi(2);
+        rgb_avg.2 += b.powi(2);
+    });
+    Rgb::from([
+        (rgb_avg.0 / image.len() as f64).sqrt() as u8,
+        (rgb_avg.1 / image.len() as f64).sqrt() as u8,
+        (rgb_avg.2 / image.len() as f64).sqrt() as u8,
+    ])
+}
+
 // --- Utils ---
 
 // --- Errors ---
 #[derive(Debug, PartialEq)]
 pub enum WallpaperGeneratorError {
-    InvalidColorName(String),
-    ImageGenerationError(String),
-    ImageSaveError,
-    InvalidMode(String),
-    NetworkError(String),
-    NoModeProvided(String),
-    OSError(String),
-    ParseError(String),
+    ImageGeneration(String),
+    ImageSave,
+    Network(String),
+    OS(String),
+    Parse(String),
 }
 
-impl std::fmt::Display for WallpaperGeneratorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for WallpaperGeneratorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            WallpaperGeneratorError::InvalidColorName(name) => {
-                write!(f, "Invalid color name: {}", name)
-            }
-            WallpaperGeneratorError::ImageGenerationError(msg) => {
+            WallpaperGeneratorError::ImageGeneration(msg) => {
                 write!(f, "Image Generation Error: {}", msg)
             }
-            WallpaperGeneratorError::ImageSaveError => {
+            WallpaperGeneratorError::ImageSave => {
                 write!(f, "Failed to save image to file")
             }
-            WallpaperGeneratorError::NetworkError(msg) => {
+            WallpaperGeneratorError::Network(msg) => {
                 write!(f, "Network Error: {}", msg)
             }
-            WallpaperGeneratorError::OSError(msg) => {
+            WallpaperGeneratorError::OS(msg) => {
                 write!(f, "OS Error: {}", msg)
             }
-            WallpaperGeneratorError::ParseError(msg) => {
+            WallpaperGeneratorError::Parse(msg) => {
                 write!(f, "Parse Error: {}", msg)
-            }
-            WallpaperGeneratorError::NoModeProvided(msg) => {
-                write!(f, "No mode provided: {}", msg)
-            }
-            WallpaperGeneratorError::InvalidMode(msg) => {
-                write!(f, "Invalid mode provided, expected mode {}", msg)
             }
         }
     }
@@ -306,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_create_color_map_all_red() {
-        let color_map = create_color_map(Operator::Gradient, 256, &vec![[255, 0, 0]]);
+        let color_map = create_color_map(Operator::Gradient, 256, &[[255, 0, 0]]);
         assert_eq!(color_map.len(), 256);
         for color in color_map {
             assert_eq!(color, [255, 0, 0]);
@@ -315,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_create_color_map_red_green() {
-        let color_map = create_color_map(Operator::Gradient, 256, &vec![[255, 0, 0], [0, 255, 0]]);
+        let color_map = create_color_map(Operator::Gradient, 256, &[[255, 0, 0], [0, 255, 0]]);
         assert_eq!(color_map.len(), 256);
         assert_eq!(color_map[0], [255, 0, 0]);
         assert_eq!(color_map[255], [0, 255, 0]);

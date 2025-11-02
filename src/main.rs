@@ -1,39 +1,48 @@
 mod cli;
+mod configuration;
+mod constants;
 mod os_implementations;
+mod themes;
 mod wallpaper_generators;
 
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
-use cli::{Cli, Commands, Config, ImageType, Mode, SolidMode};
-use os_implementations::update_wallpaper;
+use cli::{Cli, Commands, Generator};
+use configuration::{Config, Frequency, Generators};
+use os_implementations::open_editor;
 use rand::random_range;
-use std::path::PathBuf;
 use wallpaper_generators::{
-    AstraImage, Color, WallpaperGeneratorError, delete_wallpapers, generate_bing_spotlight,
-    generate_julia_set, generate_solid_color, save_image,
+    Color, delete_wallpapers, generate_bing_spotlight, generate_julia_set, generate_solid_color,
+    handle_generate_options,
 };
+
+use crate::os_implementations::handle_frequency;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    let config = Config::new(cli.verbose);
+    let mut config = Config::new(cli.verbose);
 
+    // TODO: Errors coming out in strange format. Fix this so its standardized (Error: ParseError("invalid...")) looks weird
     match cli.command {
         Some(Commands::Clean {
             older_than,
             directory,
         }) => {
-            config.print_if_verbose(
-                format!(
-                    "Deleting images older than {} days",
-                    older_than.unwrap_or(0)
-                )
-                .as_str(),
-            );
             if let Some(older_than) = older_than {
-                delete_wallpapers(&config, false, directory, Some(older_than))?;
+                let frequency = Frequency::new(older_than.as_str())?;
+                delete_wallpapers(&config, false, directory, Some(&frequency))?;
             } else {
-                // Delete all images and if directory is true, delete the "astra_wallpapers" folder
+                config.print_if_verbose("Deleting all images...");
                 delete_wallpapers(&config, true, directory, None)?;
+            }
+        }
+        Some(Commands::Config { open }) => {
+            config.print_if_verbose("Opening configuration file...");
+            Config::create_config_file_if_not_exists(&config)?;
+            if open {
+                open_editor(&config, Config::config_path())?;
+            } else {
+                println!("{}", Config::config_path().display());
             }
         }
         Some(Commands::Generate {
@@ -43,91 +52,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }) => {
             config.print_if_verbose(format!("Generating image of type: {:?}...", &image).as_str());
             let image_buf = match &image {
-                ImageType::Julia => generate_julia_set(&config, None),
-                ImageType::Solid { mode } => {
-                    generate_solid_color(&config, Some(Mode::Solid(mode.clone())))
-                } // TODO: improve this
-                ImageType::Spotlight => generate_bing_spotlight(&config, None),
+                Generator::Julia => generate_julia_set(&config),
+                Generator::Solid { mode } => generate_solid_color(&config, mode),
+                Generator::Spotlight => generate_bing_spotlight(&config),
             }?;
-            handle_generate_options(&config, image_buf, image.clone(), no_save, no_update)?;
+            handle_generate_options(&config, &image_buf, &image, no_save, no_update)?;
         }
         Some(Commands::GenerateCompletions { shell }) => {
             generate(shell, &mut Cli::command(), "astra", &mut std::io::stdout());
         }
         None => {
-            // Default to generate a random image
-            // TODO: Ideally, there's preferences for types of images user likes and pref for how often to change wallpaper
-            // I think in install directions, should have option to call astra on startup of terminal and auto check if wallpaper needs to be changed based on some preference of how often
-            let generators: [(
-                fn(
-                    config: &Config,
-                    mode: Option<Mode>,
-                ) -> Result<AstraImage, WallpaperGeneratorError>,
-                ImageType,
-            ); 3] = [
-                (generate_julia_set, ImageType::Julia),
-                (
-                    generate_solid_color,
-                    ImageType::Solid {
-                        mode: SolidMode::Random,
-                    },
-                ),
-                (generate_bing_spotlight, ImageType::Spotlight),
-            ];
+            // Since 'astra' was called, respect user config
+            config.respect_user_config = true;
+
+            if let Some(auto_clean_frequency) = config.auto_clean() {
+                config.print_if_verbose(
+                    format!(
+                        "Auto clean enabled - cleaning images older than {}",
+                        auto_clean_frequency
+                    )
+                    .as_str(),
+                );
+                delete_wallpapers(&config, false, false, config.auto_clean())?;
+            }
+
+            let generators = config
+                .generators()
+                .as_ref()
+                .map(|generators| generators.to_vec())
+                .unwrap_or(Generators::ALL_GENERATORS.to_vec());
+
+            handle_frequency(&config)?;
+
             let index = random_range(0..generators.len());
-            let image_type = generators[index].1.clone();
-            let image_buf = match &image_type {
-                ImageType::Solid { mode } => {
-                    generate_solid_color(&config, Some(Mode::Solid(mode.clone())))?
-                }
-                ImageType::Julia => generate_julia_set(&config, None)?,
-                ImageType::Spotlight => generate_bing_spotlight(&config, None)?,
-            };
-            handle_generate_options(&config, image_buf, image_type, false, false)?;
+            let image_type = &generators[index];
+            let image_buf = image_type.with_default_mode(&config)?;
+            handle_generate_options(&config, &image_buf, image_type, false, false)?;
         }
     };
-
-    Ok(())
-}
-
-// TODO: move to astra_logic module
-fn save_image_to_astra_folder(
-    config: &Config,
-    image: &ImageType,
-    image_buf: &AstraImage,
-) -> Result<PathBuf, WallpaperGeneratorError> {
-    let prefix = match image {
-        ImageType::Julia => "julia",
-        ImageType::Solid { .. } => "solid",
-        ImageType::Spotlight => "spotlight",
-    };
-    let path = save_image(&config, prefix, &image_buf)?;
-    Ok(path)
-}
-
-// TODO: move to astra_logic module
-fn handle_generate_options(
-    config: &Config,
-    image_buf: AstraImage,
-    image: ImageType,
-    no_save: bool,
-    no_update: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Handle options
-    if !no_update {
-        config.print_if_verbose(
-            "NOTE: to update wallpaper, astra must save the image to astra_wallpapers folder.",
-        );
-        // Updating requires a saved image
-        let saved_image_path = save_image_to_astra_folder(&config, &image, &image_buf)?;
-        // TODO: move verbose logs into OS implementations of update_wallpaper
-        config.print_if_verbose("Updating wallpaper...");
-        update_wallpaper(saved_image_path)?;
-        config.print_if_verbose("Updated wallpaper");
-    }
-    // If no_update == false, we already saved the image as its required to update wallpaper
-    if no_update && !no_save {
-        let _ = save_image_to_astra_folder(&config, &image, &image_buf)?;
-    }
     Ok(())
 }
