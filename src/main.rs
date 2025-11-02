@@ -16,6 +16,8 @@ use wallpaper_generators::{
     handle_generate_options,
 };
 
+use crate::os_implementations::handle_frequency;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let mut config = Config::new(cli.verbose);
@@ -80,9 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|generators| generators.to_vec())
                 .unwrap_or(Generators::ALL_GENERATORS.to_vec());
 
-            // TODO - v1.1.0: add in automatic call of astra on cron schedule
-            // TODO - v1.1.0: use this to setup automatic wallpaper refresh
-            // let _frequency = config.frequency();
+            handle_frequency(&config)?;
 
             let index = random_range(0..generators.len());
             let image_type = &generators[index];

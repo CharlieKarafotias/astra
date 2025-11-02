@@ -1,5 +1,6 @@
-use super::super::Config;
-use std::{env::var, error::Error, path::PathBuf, process::Command};
+use super::super::super::Config;
+use super::{MacOSError, install_astra_freq_with_launchctl, uninstall_astra_freq_from_launchctl};
+use std::{env::var, path::PathBuf, process::Command};
 
 // --- OS specific code ---
 
@@ -10,7 +11,7 @@ use std::{env::var, error::Error, path::PathBuf, process::Command};
 /// Returns a `MacOSError` with the `DarkModeError` variant if the command to determine
 /// OS dark mode state cannot be executed. It can also return an error if the output
 /// cannot be parsed.
-pub(crate) fn is_dark_mode_active() -> Result<bool, MacOSError> {
+pub fn is_dark_mode_active() -> Result<bool, MacOSError> {
     let output = Command::new("defaults")
         .arg("read")
         .arg("-g")
@@ -41,7 +42,7 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, MacOSError> {
 /// If the resolution of the main display cannot be found in the output of
 /// the `system_profiler` command, this function will return an `Err` containing a
 /// `MacOSError` with the `ResolutionNotFound` variant.
-pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
+pub fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
     let output = Command::new("system_profiler")
         .arg("SPDisplaysDataType")
         .arg("-detailLevel")
@@ -62,7 +63,7 @@ pub(crate) fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
 ///
 /// If the `osascript` command cannot be executed for any reason, this function will return an
 /// `Err` containing a `MacOSError` with the `SystemProfilerError` variant.
-pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
+pub fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
     let script = format!(
         "tell application \"System Events\" to set picture of every desktop to POSIX file {:?}",
         path.as_os_str().to_os_string()
@@ -83,19 +84,47 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
 /// # Errors
 /// - Returns a `MacOSError` with the `OpenEditorError` variant if the command to open the
 ///   file cannot be executed for any reason.
-pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
+pub fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
     let editor = var("EDITOR").unwrap_or("open".to_string());
-    let res = match editor.as_str() {
+    let _ = match editor.as_str() {
         "open" => {
             config.print_if_verbose("Using default editor");
-            Command::new("open").arg("-t").arg(path).output()
+            Command::new("open")
+                .arg("-t")
+                .arg(path)
+                .spawn()
+                .map_err(|_| MacOSError::OpenEditorError)?
+                .wait()
+                .map_err(|_| MacOSError::OpenEditorError)?
         }
         editor => {
             config.print_if_verbose(&format!("Using editor: {}", editor));
-            Command::new(editor).arg(path).output()
+            Command::new(editor)
+                .arg(path)
+                .spawn()
+                .map_err(|_| MacOSError::OpenEditorError)?
+                .wait()
+                .map_err(|_| MacOSError::OpenEditorError)?
         }
     };
-    res.map_err(|_| MacOSError::OpenEditorError)?;
+    Ok(())
+}
+
+/// CRUD operator function for interfacing with the launchd system in macOS
+///
+/// This function will take in the configuration struct and check if the user
+/// config contains a frequency key/value.
+///
+/// - If key/value is defined, take the frequency and ensure astra launchd task is created/updated
+/// - If key/value is not defined, bootout of Job and then delete file
+///
+/// The job is defined in the User Agents location (~/Library/LaunchAgents/)
+pub fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
+    if let Some(frequency) = config.frequency() {
+        install_astra_freq_with_launchctl(frequency)?;
+    } else {
+        uninstall_astra_freq_from_launchctl()?;
+    }
     Ok(())
 }
 
@@ -228,35 +257,6 @@ fn get_key_value_pair_based_on_spaces<'a>(
 }
 
 // --- Helper functions ---
-
-// --- Errors ---
-#[derive(Debug, PartialEq)]
-pub enum MacOSError {
-    DarkModeError,
-    MainDisplayNotFound,
-    OpenEditorError,
-    ResolutionNotFound,
-    SystemProfilerError,
-}
-
-impl std::fmt::Display for MacOSError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MacOSError::DarkModeError => write!(f, "Unable to determine dark mode status"),
-            MacOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
-            MacOSError::OpenEditorError => write!(f, "Unable to open editor"),
-            MacOSError::ResolutionNotFound => {
-                write!(f, "Unable to determine resolution of main display")
-            }
-            MacOSError::SystemProfilerError => {
-                write!(f, "Encountered error running system_profiler")
-            }
-        }
-    }
-}
-
-impl Error for MacOSError {}
-// --- Errors ---
 
 // --- Tests ---
 
