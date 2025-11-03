@@ -1,5 +1,10 @@
 # Astra Release Notes
 
+## v1.1.1
+
+### Bug Fix
+- Fixed an OS error that occurred when auto_clean was enabled but the wallpaper folder didn’t exist
+
 ## v1.1.0
 
 ### New Features
