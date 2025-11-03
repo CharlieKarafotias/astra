@@ -54,6 +54,15 @@ pub fn delete_wallpapers(
         .ok_or_else(|| {
             WallpaperGeneratorError::OS("could not derive wallpapers path".to_string())
         })?;
+
+    // NOTE: if user has never run astra before, the directory might not exist
+    if !path.is_dir() {
+        config.print_if_verbose(
+            "WARN: wallpaper directory does not exist. Skipping wallpaper cleanup",
+        );
+        return Ok(());
+    }
+
     config.print_if_verbose(format!("Deleting wallpapers from {}", path.display()).as_str());
     if delete_dir {
         remove_dir_all(&path).map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
