@@ -166,14 +166,19 @@ fn retrieve_last_execution_time() -> Result<u64, MacOSError> {
     let proj_dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
         .ok_or_else(|| MacOSError::OS("could not derive data_dir".to_string()))?;
     let path_to_time_stamp_file = proj_dirs.data_dir().join("last_exec.txt");
-    let timestamp = fs::read_to_string(&path_to_time_stamp_file)
-        .map_err(|e| MacOSError::OS(format!("failed to read last_exec.txt: {e}")))?
-        .splitn(2, "=")
-        .nth(1)
-        .expect("should be a time stamp")
-        .trim()
-        .parse::<u64>()
-        .map_err(|e| MacOSError::ParseError(e.to_string()))?;
+    let timestamp = if path_to_time_stamp_file.exists() {
+        fs::read_to_string(&path_to_time_stamp_file)
+            .map_err(|e| MacOSError::OS(format!("failed to read last_exec.txt: {e}")))?
+            .splitn(2, "=")
+            .nth(1)
+            .expect("should be a time stamp")
+            .trim()
+            .parse::<u64>()
+            .map_err(|e| MacOSError::ParseError(e.to_string()))?
+    } else {
+        // IF no file is found, then assume first execution time was UNIX_EPOCH
+        0
+    };
     Ok(timestamp)
 }
 
