@@ -1,5 +1,11 @@
 # Astra Release Notes
 
+## v1.1.3
+
+### Bug Fix
+
+- Fix issue where macOS frequency attempts to read from last_exec file, but the file does not exist
+
 ## v1.1.2
 
 ### Bug Fix
