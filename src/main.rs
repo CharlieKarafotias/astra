@@ -9,14 +9,15 @@ use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use cli::{Cli, Commands, Generator};
 use configuration::{Config, Frequency, Generators};
-use os_implementations::open_editor;
+use os_implementations::{handle_frequency, open_editor};
 use rand::random_range;
 use wallpaper_generators::{
     Color, delete_wallpapers, generate_bing_spotlight, generate_julia_set, generate_solid_color,
     handle_generate_options,
 };
 
-use crate::os_implementations::handle_frequency;
+#[cfg(target_os = "macos")]
+use os_implementations::save_last_execution_time;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
@@ -88,6 +89,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let image_type = &generators[index];
             let image_buf = image_type.with_default_mode(&config)?;
             handle_generate_options(&config, &image_buf, image_type, false, false)?;
+
+            #[cfg(target_os = "macos")]
+            save_last_execution_time()?;
         }
     };
     Ok(())

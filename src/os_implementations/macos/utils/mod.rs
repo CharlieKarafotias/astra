@@ -1,5 +1,12 @@
 use super::super::super::Config;
-use super::{MacOSError, install_astra_freq_with_launchctl, uninstall_astra_freq_from_launchctl};
+use super::{
+    MacOSError, launchctl_check_existance_of_astra_job, launchctl_install_astra_freq,
+    launchctl_uninstall_astra_freq,
+};
+use crate::constants::{APPLICATION, MAC_OS_LAUNCHCTL_INTERVAL, ORGANIZATION, QUALIFIER};
+use directories::ProjectDirs;
+use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env::var, path::PathBuf, process::Command};
 
 // --- OS specific code ---
@@ -115,22 +122,80 @@ pub fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
 /// This function will take in the configuration struct and check if the user
 /// config contains a frequency key/value.
 ///
-/// - If key/value is defined, take the frequency and ensure astra launchd task is created/updated
-/// - If key/value is not defined, bootout of Job and then delete file
+/// - If key/value is defined:
+///   1. Check that frequency with launchctl is set with proper interval.
+///      IF not, then install launchctl job and continue
+///   2. Check if duration between current_timestamp and last execution of astra is greater than
+///      frequency.
+///      IF so, then proceed with program execution (returns true)
+///      IF not, then program execution will stop and no wallpaper update (returns false)
+/// - If key/value is not defined, remove the astra job from launchctl
 ///
 /// The job is defined in the User Agents location (~/Library/LaunchAgents/)
-pub fn handle_frequency(config: &Config) -> Result<(), MacOSError> {
+pub fn handle_frequency(config: &Config) -> Result<bool, MacOSError> {
     if let Some(frequency) = config.frequency() {
-        install_astra_freq_with_launchctl(frequency)?;
+        if let Some(interval) = launchctl_check_existance_of_astra_job()?
+            && interval != MAC_OS_LAUNCHCTL_INTERVAL
+        {
+            launchctl_install_astra_freq()?;
+        }
+        let current_timestamp_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| MacOSError::OS("time should go forward".to_string()))?
+            .as_secs();
+        if current_timestamp_secs - retrieve_last_execution_time()? < frequency.to_seconds() {
+            return Ok(false);
+        }
     } else {
-        uninstall_astra_freq_from_launchctl()?;
+        launchctl_uninstall_astra_freq()?;
     }
-    Ok(())
+    Ok(true)
 }
 
 // --- OS specific code ---
 
 // --- Helper functions ---
+
+/// Helper function that retrieves the last execution time from the `last_exec.txt` file.
+/// This time stamp can be set using the save_last_execution_time function below
+fn retrieve_last_execution_time() -> Result<u64, MacOSError> {
+    let proj_dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        .ok_or_else(|| MacOSError::OS("could not derive data_dir".to_string()))?;
+    let path_to_time_stamp_file = proj_dirs.data_dir().join("last_exec.txt");
+    let timestamp = fs::read_to_string(&path_to_time_stamp_file)
+        .map_err(|e| MacOSError::OS(format!("failed to read last_exec.txt: {e}")))?
+        .splitn(2, "=")
+        .nth(1)
+        .expect("should be a time stamp")
+        .trim()
+        .parse::<u64>()
+        .map_err(|e| MacOSError::ParseError(e.to_string()))?;
+    Ok(timestamp)
+}
+
+// TODO: use this func in main function loop if OS is mac and successful execution
+
+/// Helper function that saves the last execution time when the `astra` command is ran in
+/// data_directory. The file is named `last_exec.txt`.
+///
+/// This function is required for the handle_frequency function as macOS implementation
+/// uses launchd job with 10 minute interval. This interval checks this time file
+/// to determine if duration from last exec is higher than the frequency specified by user.
+pub fn save_last_execution_time() -> Result<(), MacOSError> {
+    let proj_dirs = ProjectDirs::from(QUALIFIER, ORGANIZATION, APPLICATION)
+        .ok_or_else(|| MacOSError::OS("could not derive data_dir".to_string()))?;
+    let path_to_time_stamp_file = proj_dirs.data_dir().join("last_exec.txt");
+    let seconds_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| MacOSError::OS("time should go forward".to_string()))?
+        .as_secs();
+    fs::write(
+        &path_to_time_stamp_file,
+        format!("last_run = {seconds_timestamp}"),
+    )
+    .map_err(|e| MacOSError::OS(format!("failed to create/update last_exec.txt file: {e}")))?;
+    Ok(())
+}
 
 /// Parses the output of the `system_profiler` command with the `SPDisplaysDataType`
 /// and `-detailLevel mini` arguments.

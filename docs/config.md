@@ -53,13 +53,32 @@ Units include seconds (`s`), minutes (`m`), hours (`h`), days (`d`), weeks (`w`)
 
 ### `frequency`
 
-Controls how often Astra automatically updates your wallpaper.  
+Controls how often Astra automatically updates your wallpaper. For example, when setting `1d` this means your wallpaper will change every day.
 Units include seconds (`s`), minutes (`m`), hours (`h`), days (`d`), weeks (`w`), months (`M`), and years (`y`).
 
 **Type:** string  
 **Format:** `^\d+[smhdwMy]$`  
 **Example:** `"1d"`  
 **Default:** Automatic updates are disabled; must run `astra` to update wallpaper.
+
+#### OS Specific Notes:
+
+##### macOS
+
+On macOS, the frequency setting is implemented using `launchd`. Internally, `astra` creates a launchd job that runs every 10 minutes.
+Each time it runs, it checks whether your configured frequency duration has elapsed.
+If it has, `astra` runs normally and applies the rest of your configuration.
+
+Because of this design, any frequency below 10 minutes is treated as 10 minutes, and any frequency that is not aligned to a 10-minute interval will still be evaluated on the next 10-minute mark.
+
+##### Windows
+
+When adjusting the frequency key on Windows, be aware that each automatic run of `astra` will briefly show a flashing Command Prompt window. This is expected behavior, as `astra` runs under the current user account.
+
+Windows also has a few scheduling limitations to consider:
+	1.	Frequencies between 1s and 60s are rounded up to 1m due to `schtasks` limitations.
+	2.	Frequencies expressed in seconds that exceed one minute (e.g., 90s) are converted to minutes and rounded (e.g., 90s becomes 1m).
+	3.	Frequencies longer than one year are reduced to 12M, because `schtasks` cannot schedule intervals greater than one year.
 
 ---
 
@@ -260,22 +279,3 @@ Optional array of RGB color arrays used when dark mode is active.
 
 ---
 
-## macOS Configuration Notes
-
-When modifying the `frequency` key on macOS, follow these steps to ensure the system daemon reloads properly:
-
-1. Remove the `frequency` key from your configuration file.
-2. Run `astra` once to unload the background service.
-3. Add `frequency` back to the file with your new desired value.
-
-## Windows Configuration Notes
-
-When modifying the `frequency` key on Windows, note that everytime the system runs astra automatically, a cmd window will flash. This is astra running as the user.
-
-Further, note there are a few limitations on Windows for frequency:
-
-1. Setting frequency between `1s` and `60s` will become `1m` on Windows due to schtasks limitation.
-2. Setting frequency with to some seconds like `90s` will convert to minutes and round (this will be `1m` on Windows).
-3. Setting frequency to anything above a year will change to `12m` as schtasks does not support higher than 1 year.
-
----
