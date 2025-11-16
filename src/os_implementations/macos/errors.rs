@@ -7,6 +7,7 @@ pub enum MacOSError {
     MainDisplayNotFound,
     OpenEditorError,
     OS(String),
+    ParseError(String),
     ResolutionNotFound,
     StringConversion,
     SystemProfilerError,
@@ -22,6 +23,7 @@ impl std::fmt::Display for MacOSError {
             MacOSError::MainDisplayNotFound => write!(f, "Unable to determine main display"),
             MacOSError::OpenEditorError => write!(f, "Unable to open editor"),
             MacOSError::OS(err_msg) => write!(f, "General OS error: {err_msg}"),
+            MacOSError::ParseError(err_msg) => write!(f, "Unable to parse output: {err_msg}"),
             MacOSError::ResolutionNotFound => {
                 write!(f, "Unable to determine resolution of main display")
             }

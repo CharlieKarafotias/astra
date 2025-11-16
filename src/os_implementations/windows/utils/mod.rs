@@ -103,11 +103,11 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsE
 ///
 /// - IF key/value is defined, take the frequency and ensure astra task is created/updated
 /// - IF key/value is not defined, ensure astra task is removed from scheduled tasks
-pub(crate) fn handle_frequency(config: &Config) -> Result<(), WindowsError> {
+pub(crate) fn handle_frequency(config: &Config) -> Result<bool, WindowsError> {
     if let Some(frequency) = config.frequency() {
         install_astra_task(frequency)?;
     } else {
         uninstall_astra_task()?;
     }
-    Ok(())
+    Ok(true)
 }

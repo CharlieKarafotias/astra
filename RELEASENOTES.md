@@ -1,5 +1,11 @@
 # Astra Release Notes
 
+## v1.1.2
+
+### Bug Fix
+- Fix issue where macOS frequency is not respected when set frequency is longer than user's normal wake session
+  - Ensure frequency means "wall time", not "active wake session" (`1d` frequency is truly 1 day)
+
 ## v1.1.1
 
 ### Bug Fix

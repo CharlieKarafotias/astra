@@ -126,11 +126,11 @@ pub fn open_editor(config: &Config, path: PathBuf) -> Result<(), LinuxOSError> {
 ///
 /// - If key/value is defined, take the frequency and ensure astra service/timer is created/updated
 /// - If key/value is not defined, ensure the astra service/timer file is deleted (if it exists)
-pub fn handle_frequency(config: &Config) -> Result<(), LinuxOSError> {
+pub fn handle_frequency(config: &Config) -> Result<bool, LinuxOSError> {
     if let Some(frequency) = config.frequency() {
         install_astra_service_and_timer(frequency)?;
     } else {
         uninstall_astra_serivice_and_timer()?;
     }
-    Ok(())
+    Ok(true)
 }
