@@ -83,15 +83,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(|generators| generators.to_vec())
                 .unwrap_or(Generators::ALL_GENERATORS.to_vec());
 
-            handle_frequency(&config)?;
+            // If true, then run update - else ignore
+            if handle_frequency(&config)? {
+                let index = random_range(0..generators.len());
+                let image_type = &generators[index];
+                let image_buf = image_type.with_default_mode(&config)?;
+                handle_generate_options(&config, &image_buf, image_type, false, false)?;
 
-            let index = random_range(0..generators.len());
-            let image_type = &generators[index];
-            let image_buf = image_type.with_default_mode(&config)?;
-            handle_generate_options(&config, &image_buf, image_type, false, false)?;
-
-            #[cfg(target_os = "macos")]
-            save_last_execution_time()?;
+                #[cfg(target_os = "macos")]
+                save_last_execution_time()?;
+            }
         }
     };
     Ok(())

@@ -134,11 +134,15 @@ pub fn open_editor(config: &Config, path: PathBuf) -> Result<(), MacOSError> {
 /// The job is defined in the User Agents location (~/Library/LaunchAgents/)
 pub fn handle_frequency(config: &Config) -> Result<bool, MacOSError> {
     if let Some(frequency) = config.frequency() {
-        if let Some(interval) = launchctl_check_existance_of_astra_job()?
-            && interval != MAC_OS_LAUNCHCTL_INTERVAL
-        {
-            launchctl_install_astra_freq()?;
+        match launchctl_check_existance_of_astra_job()? {
+            Some(interval) => {
+                if interval != MAC_OS_LAUNCHCTL_INTERVAL {
+                    launchctl_install_astra_freq()?;
+                }
+            }
+            None => launchctl_install_astra_freq()?,
         }
+
         let current_timestamp_secs = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| MacOSError::OS("time should go forward".to_string()))?
