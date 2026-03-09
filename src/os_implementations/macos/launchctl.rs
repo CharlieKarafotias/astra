@@ -88,7 +88,7 @@ fn launchctl_bootout_astra(plist_path: &PathBuf) -> Result<(), MacOSError> {
 /// Runs the print command to search for existance of Astra job.
 /// IF found, will return the run interval
 /// IF NOT found, will return None
-pub(in crate::os_implementations::macos) fn launchctl_check_existance_of_astra_job()
+pub(in crate::os_implementations::macos) fn launchctl_check_existence_of_astra_job()
 -> Result<Option<u64>, MacOSError> {
     let user_id = get_user_id()?;
     let output = Command::new("launchctl")
@@ -98,7 +98,7 @@ pub(in crate::os_implementations::macos) fn launchctl_check_existance_of_astra_j
         ))
         .output()
         .map_err(|e| MacOSError::Launchctl(e.to_string()))?;
-    // NOTE: any error status is interpreted as job doesn't exist and should be readded by
+    // NOTE: any error status is interpreted as job doesn't exist and should be re-added by
     // handle_frequency
     if !output.status.success() {
         return Ok(None);
@@ -113,7 +113,7 @@ fn extract_interval(output: &[u8]) -> Option<u64> {
         .lines()
         .find(|l| l.contains("run interval"))
         // example line: run interval = 600 seconds
-        .and_then(|l| l.splitn(2, '=').nth(1))
+        .and_then(|l| l.split_once('=').map(|x| x.1))
         .and_then(|l| l.trim().split_whitespace().next())
         .and_then(|n| n.parse::<u64>().ok())
 }

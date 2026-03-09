@@ -1,5 +1,14 @@
 # Astra Release Notes
 
+## v1.2.0
+
+- Fix issue where setting unique wallpaper names on macOS fills up "Wallpaper > Your Pictures" area with many images when frequency is set high
+  - Change: 
+    - macOS: wallpaper update only uses 2 file names on wallpaper OS level: `astra_1` or `astra_2`
+    - The name to use is based on if `astra` has previously set an image on the OS
+    - This trick forces a wallpaper and cache update on macOS since file path changed
+- Dependency bumps
+
 ## v1.1.3
 
 ### Bug Fix

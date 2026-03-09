@@ -1,6 +1,6 @@
 use super::color_theme::ColorTheme;
-use rand::Rng;
 use rand::distr::{Distribution, StandardUniform};
+use rand::{Rng, RngExt};
 
 const THEME_COUNT: usize = 10;
 pub enum ColorThemes {

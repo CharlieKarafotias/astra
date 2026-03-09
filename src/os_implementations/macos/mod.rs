@@ -3,5 +3,5 @@ mod launchctl;
 mod utils;
 
 pub use errors::*;
-pub(self) use launchctl::*;
+use launchctl::*;
 pub use utils::*;
