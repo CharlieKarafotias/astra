@@ -6,7 +6,7 @@ use super::super::{
 use super::utils::{AstraImage, WallpaperGeneratorError};
 use clap::ValueEnum;
 use image::{ImageBuffer, Rgb};
-use rand::{Rng, rng};
+use rand::{RngExt, rng};
 use serde::Deserialize;
 
 pub fn generate_solid_color(

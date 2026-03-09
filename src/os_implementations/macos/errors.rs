@@ -2,6 +2,7 @@ use std::error::Error;
 
 #[derive(Debug, PartialEq)]
 pub enum MacOSError {
+    Copy(String),
     DarkModeError,
     Launchctl(String),
     MainDisplayNotFound,
@@ -16,6 +17,7 @@ pub enum MacOSError {
 impl std::fmt::Display for MacOSError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            MacOSError::Copy(err_msg) => write!(f, "Unable to copy file: {err_msg}"),
             MacOSError::DarkModeError => write!(f, "Unable to determine dark mode status"),
             MacOSError::Launchctl(err_msg) => {
                 write!(f, "Launchctl error: {err_msg}")
