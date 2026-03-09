@@ -142,7 +142,7 @@ pub fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
                 astra_1_path
             } else {
                 return Err(MacOSError::OS(
-                    "failed to copy astra image to astra_1.png file".to_string(),
+                    "expected image path to contain a parent but none returned".to_string(),
                 ));
             }
         };
