@@ -3,11 +3,13 @@ use serde::Deserialize;
 use std::fmt::{Display, Formatter};
 
 pub(crate) mod julia;
+mod nasa_apod;
 mod solid;
 mod spotlight;
 
 // Any generator config should be added to ALL_GENERATORS with default values (see Generators below)
 pub(super) use julia::JuliaConfig;
+pub(super) use nasa_apod::NasaApodConfig;
 pub(super) use solid::SolidConfig;
 pub(super) use spotlight::SpotlightConfig;
 
@@ -34,8 +36,9 @@ macro_rules! respect_user_config_or_default {
 pub struct Generators(pub(super) Vec<Generator>);
 
 impl Generators {
-    pub const ALL_GENERATORS: [Generator; 3] = [
+    pub const ALL_GENERATORS: [Generator; 4] = [
         Generator::Julia,
+        Generator::NasaAPOD,
         Generator::Solid {
             mode: SolidMode::Random,
         },

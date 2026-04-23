@@ -12,8 +12,8 @@ use configuration::{Config, Frequency, Generators};
 use os_implementations::{handle_frequency, open_editor};
 use rand::random_range;
 use wallpaper_generators::{
-    Color, delete_wallpapers, generate_bing_spotlight, generate_julia_set, generate_solid_color,
-    handle_generate_options,
+    Color, delete_wallpapers, generate_bing_spotlight, generate_julia_set, generate_nasa_apod,
+    generate_solid_color, handle_generate_options,
 };
 
 #[cfg(target_os = "macos")]
@@ -54,6 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             config.print_if_verbose(format!("Generating image of type: {:?}...", &image).as_str());
             let image_buf = match &image {
                 Generator::Julia => generate_julia_set(&config),
+                Generator::NasaAPOD => generate_nasa_apod(&config),
                 Generator::Solid { mode } => generate_solid_color(&config, mode),
                 Generator::Spotlight => generate_bing_spotlight(&config),
             }?;

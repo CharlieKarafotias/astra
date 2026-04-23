@@ -252,6 +252,29 @@ pub fn save_image(
     Ok(save_path)
 }
 
+/// Download an image from the URL into memory
+///
+/// # Retuns
+///
+/// A `Result` containing the image in memory in form of bytes on success
+///
+/// # Errors
+///
+/// * Network: If failure to donwload image OR convert into bytes
+pub(super) fn download_image_to_memory(
+    config: &Config,
+    url: &str,
+) -> Result<Vec<u8>, WallpaperGeneratorError> {
+    config.print_if_verbose(format!("Downloading image from {}", url).as_str());
+    let image = reqwest::blocking::get(url)
+        .map_err(|e| WallpaperGeneratorError::Network(e.to_string()))?
+        .bytes()
+        .map_err(|e| WallpaperGeneratorError::Network(e.to_string()))?
+        .to_vec();
+    config.print_if_verbose("Image downloaded successfully");
+    Ok(image)
+}
+
 /// Scales the range of the provided plane to generate a zoomed in image.
 ///
 /// Given the original range of the plane, the center point of the

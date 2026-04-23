@@ -1,6 +1,6 @@
 [package]
 name = "astra"
-version = "1.2.0"
+version = "1.3.0"
 license = "MIT"
 edition = "2024"
 repository = "https://github.com/CharlieKarafotias/astra"
@@ -8,13 +8,13 @@ authors = ["Charlie Karafotias <cnkara2023@gmail.com>"]
 description = "A tool for generating wallpaper images"
 
 [dependencies]
-clap = { version = "4.5.60", features = ["derive"] }
-clap_complete = "4.5.66"
+clap = { version = "4.6.1", features = ["derive"] }
+clap_complete = "4.6.2"
 directories = "6.0.0"
-image = { version = "0.25.9", features = ["png", "rayon"] }
+image = { version = "0.25.10", features = ["png", "rayon"] }
 num-complex = { version = "0.4.6", features = ["std"] }
-rand = "0.10.0"
-rayon = "1.11.0"
+rand = "0.10.1"
+rayon = "1.12.0"
 reqwest = { version = "0.13.2", features = ["blocking", "json"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -35,4 +35,4 @@ objc2-app-kit = "0.3.2"
 objc2-foundation = "0.3.2"
 
 [dev-dependencies]
-tempfile = "3.26.0"
+tempfile = "3.27.0"
