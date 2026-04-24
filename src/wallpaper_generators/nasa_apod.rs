@@ -184,7 +184,7 @@ impl ApodDate {
     }
 
     fn to_date(&self) -> Result<NaiveDate, ApodDateError> {
-        let year = if self.year <= 99 {
+        let year = if self.year >= 95 && self.year <= 99 {
             1900 + self.year
         } else {
             2000 + self.year
