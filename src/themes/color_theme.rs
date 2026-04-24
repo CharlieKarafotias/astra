@@ -83,3 +83,5 @@ impl fmt::Display for ColorThemeError {
         }
     }
 }
+
+impl std::error::Error for ColorThemeError {}

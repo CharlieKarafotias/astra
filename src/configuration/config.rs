@@ -263,7 +263,7 @@ mod tests {
             Some(Generators(Vec::from([
                 Generator::Spotlight,
                 Generator::Julia,
-                Generator::NasaAPOD,
+                Generator::NasaAPOD { date: None },
                 Generator::Solid {
                     mode: SolidMode::Random
                 }

@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             config.print_if_verbose(format!("Generating image of type: {:?}...", &image).as_str());
             let image_buf = match &image {
                 Generator::Julia => generate_julia_set(&config),
-                Generator::NasaAPOD => generate_nasa_apod(&config),
+                Generator::NasaAPOD { date } => generate_nasa_apod(&config, date),
                 Generator::Solid { mode } => generate_solid_color(&config, mode),
                 Generator::Spotlight => generate_bing_spotlight(&config),
             }?;

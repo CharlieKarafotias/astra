@@ -215,18 +215,28 @@ When `true`, Astra analyzes candidate spotlight images and selects one matching 
 
 ---
 
-## Nasa APOD Generator (`nasa_apod_gen`)
+## NASA APOD Generator (`nasa_apod_gen`)
 
 Controls wallpapers fetched from NASA's Astronomy Picture of the Day service.
 
-### `nasa_apod_gen.date`
+### `nasa_apod_gen.date_from`
 
-Specifies which date to use.
+Specifies the earliest astronomy picture of the day to use (can be alone or used alongside `date_to`)
 
 **Type:** string
 **Format:** `yymmdd`
 **Example:** `260423` (April 23rd, 2026)
-**Default:** Current day if not set
+**Default:** Current day if neither `date_from`/`date_to` are set, June 20, 1995 if `date_to` is set
+
+---
+### `nasa_apod_gen.date_to`
+
+Specifies the latest astronomy picture of the day to use (can be alone or used alongside `date_from`)
+
+**Type:** string
+**Format:** `yymmdd`
+**Example:** `260423` (April 23rd, 2026)
+**Default:** Current day is used when `date_from` is set & when neither `date_from` nor `date_to` are set
 
 ---
 

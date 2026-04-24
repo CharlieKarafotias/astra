@@ -2,8 +2,8 @@ use super::Color;
 use crate::{
     configuration::Config,
     wallpaper_generators::{
-        AstraImage, WallpaperGeneratorError, generate_bing_spotlight, generate_julia_set,
-        generate_nasa_apod, generate_solid_color,
+        ApodDate, AstraImage, WallpaperGeneratorError, generate_bing_spotlight, generate_julia_set,
+        generate_nasa_apod, generate_solid_color, parse_yymmdd,
     },
 };
 use clap::{Parser, Subcommand};
@@ -58,14 +58,17 @@ pub enum Commands {
     },
 }
 
-// TODO: add in args for NasaAPOD like specific day
-
 #[derive(Clone, Debug, PartialEq, Subcommand)]
 pub enum Generator {
     /// Sets wallpaper to a randomly generated Julia Set
     Julia,
-    /// Sets wallpaper to one of NASA's Astronomy Pictures of the Day
-    NasaAPOD,
+    /// Sets wallpaper to one of NASA's Astronomy Pictures of the Day (if no args passed, defaults
+    /// to today's image)
+    NasaAPOD {
+        /// Specify specific day (format: YYMMDD)
+        #[arg(value_parser = parse_yymmdd)]
+        date: Option<ApodDate>,
+    },
     /// Sets wallpaper to a solid color
     Solid {
         #[command(subcommand)]
@@ -81,7 +84,7 @@ impl FromStr for Generator {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "julia" => Ok(Generator::Julia),
-            "nasa_apod" => Ok(Generator::NasaAPOD),
+            "nasa_apod" => Ok(Generator::NasaAPOD { date: None }),
             "spotlight" => Ok(Generator::Spotlight),
             "solid" => Ok(Generator::Solid {
                 mode: SolidMode::Random,
@@ -98,7 +101,7 @@ impl Generator {
     ) -> Result<AstraImage, WallpaperGeneratorError> {
         match self {
             Generator::Julia => generate_julia_set(config),
-            Generator::NasaAPOD => generate_nasa_apod(config),
+            Generator::NasaAPOD { date } => generate_nasa_apod(config, date),
             Generator::Solid { mode } => generate_solid_color(config, mode),
             Generator::Spotlight => generate_bing_spotlight(config),
         }
@@ -107,7 +110,7 @@ impl Generator {
     pub fn prefix(&self) -> &str {
         match self {
             Generator::Julia => "julia",
-            Generator::NasaAPOD => "nasa_apod",
+            Generator::NasaAPOD { date: _ } => "nasa_apod",
             Generator::Solid { mode: _ } => "solid",
             Generator::Spotlight => "spotlight",
         }

@@ -38,7 +38,7 @@ pub struct Generators(pub(super) Vec<Generator>);
 impl Generators {
     pub const ALL_GENERATORS: [Generator; 4] = [
         Generator::Julia,
-        Generator::NasaAPOD,
+        Generator::NasaAPOD { date: None },
         Generator::Solid {
             mode: SolidMode::Random,
         },
