@@ -32,6 +32,7 @@ pub fn generate_solid_color(
             (true, None) | (false, _) => ThemeSelector::random(),
         };
         let selected_theme = theme.selected();
+        // TODO: this feels weird, why is solid using julia_gen config? Fix this
         let appearance: Appearance =
             crate::respect_user_config_or_default!(config, julia_gen, appearance, {
                 Ok(Appearance::Auto)

@@ -87,7 +87,7 @@ Windows also has a few scheduling limitations to consider:
 A list of wallpaper generators to choose from when `astra` runs. If multiple generators are listed, Astra will select one at random.
 
 **Type:** array  
-**Allowed values:** `["julia", "solid", "spotlight"]`  
+**Allowed values:** `["julia", "nasa_apod", "solid", "spotlight"]`
 **Example:** `["spotlight", "solid"]`  
 **Default:** All available generators are used; one is chosen randomly.
 
@@ -212,6 +212,31 @@ When `true`, Astra analyzes candidate spotlight images and selects one matching 
 **Type:** boolean  
 **Example:** `true`  
 **Default:** `false`
+
+---
+
+## NASA APOD Generator (`nasa_apod_gen`)
+
+Controls wallpapers fetched from NASA's Astronomy Picture of the Day service.
+
+### `nasa_apod_gen.date_from`
+
+Specifies the earliest astronomy picture of the day to use (can be alone or used alongside `date_to`)
+
+**Type:** string
+**Format:** `yymmdd`
+**Example:** `260423` (April 23rd, 2026)
+**Default:** Current day if neither `date_from`/`date_to` are set, June 20, 1995 if `date_to` is set
+
+---
+### `nasa_apod_gen.date_to`
+
+Specifies the latest astronomy picture of the day to use (can be alone or used alongside `date_from`)
+
+**Type:** string
+**Format:** `yymmdd`
+**Example:** `260423` (April 23rd, 2026)
+**Default:** Current day is used when `date_from` is set & when neither `date_from` nor `date_to` are set
 
 ---
 

@@ -1,7 +1,7 @@
 use super::super::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
 use super::{
     frequency::Frequency,
-    generators::{Generators, JuliaConfig, SolidConfig, SpotlightConfig},
+    generators::{Generators, JuliaConfig, NasaApodConfig, SolidConfig, SpotlightConfig},
     theme::ThemeConfigs,
     user_config::UserConfig,
 };
@@ -33,6 +33,7 @@ impl Config {
                     frequency: user_config.frequency,
                     generators: user_config.generators,
                     julia_gen: user_config.julia_gen,
+                    nasa_apod_gen: user_config.nasa_apod_gen,
                     solid_gen: user_config.solid_gen,
                     spotlight_gen: user_config.spotlight_gen,
                     themes: user_config.themes,
@@ -92,6 +93,14 @@ impl Config {
     pub fn julia_gen(&self) -> Option<&JuliaConfig> {
         if let Some(user_config) = &self.user_config {
             user_config.julia_gen.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn nasa_apod_gen(&self) -> Option<&NasaApodConfig> {
+        if let Some(user_config) = &self.user_config {
+            user_config.nasa_apod_gen.as_ref()
         } else {
             None
         }
@@ -243,7 +252,7 @@ mod tests {
         let path = dir.path().join("config.json");
         fs::write(
             &path,
-            r#"{ "generators": ["spotlight", "julia", "solid"] }"#,
+            r#"{ "generators": ["spotlight", "julia", "nasa_apod", "solid"] }"#,
         )
         .unwrap();
 
@@ -254,6 +263,7 @@ mod tests {
             Some(Generators(Vec::from([
                 Generator::Spotlight,
                 Generator::Julia,
+                Generator::NasaAPOD { date: None },
                 Generator::Solid {
                     mode: SolidMode::Random
                 }

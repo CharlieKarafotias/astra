@@ -1,7 +1,7 @@
 use super::super::configuration::Config;
 use super::{
     average_color,
-    utils::{AstraImage, WallpaperGeneratorError},
+    utils::{AstraImage, WallpaperGeneratorError, download_image_to_memory},
 };
 use serde::Deserialize;
 
@@ -169,20 +169,6 @@ fn compare_image_to_user_theme_averages(
         }
     }
     best_distance
-}
-
-fn download_image_to_memory(
-    config: &Config,
-    url: &str,
-) -> Result<Vec<u8>, WallpaperGeneratorError> {
-    config.print_if_verbose(format!("Downloading image from {}", url).as_str());
-    let image = reqwest::blocking::get(url)
-        .map_err(|e| WallpaperGeneratorError::Network(e.to_string()))?
-        .bytes()
-        .map_err(|e| WallpaperGeneratorError::Network(e.to_string()))?
-        .to_vec();
-    config.print_if_verbose("Image downloaded successfully");
-    Ok(image)
 }
 
 fn get_image_download_urls(

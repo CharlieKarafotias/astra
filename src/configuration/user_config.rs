@@ -1,6 +1,6 @@
 use super::{
     frequency::Frequency,
-    generators::{Generators, JuliaConfig, SolidConfig, SpotlightConfig},
+    generators::{Generators, JuliaConfig, NasaApodConfig, SolidConfig, SpotlightConfig},
     theme::ThemeConfigs,
 };
 use serde::Deserialize;
@@ -13,6 +13,7 @@ pub(super) struct UserConfig {
     pub(super) frequency: Option<Frequency>,
     pub(super) generators: Option<Generators>,
     pub(super) julia_gen: Option<JuliaConfig>,
+    pub(super) nasa_apod_gen: Option<NasaApodConfig>,
     pub(super) solid_gen: Option<SolidConfig>,
     pub(super) spotlight_gen: Option<SpotlightConfig>,
     pub(super) themes: Option<ThemeConfigs>,
@@ -35,6 +36,7 @@ impl Display for UserConfig {
         push_field!(frequency);
         push_field!(generators);
         push_field!(julia_gen);
+        push_field!(nasa_apod_gen);
         push_field!(solid_gen);
         push_field!(spotlight_gen);
         push_field!(themes);

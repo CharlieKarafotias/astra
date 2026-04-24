@@ -1,5 +1,12 @@
 # Astra Release Notes
 
+## v1.3.0
+
+### New Features
+- Introduction of Astronomy Picture of the Day generator provided by NASA
+### Changes
+- Dependency bumps
+
 ## v1.2.0
 
 - Fix issue where setting unique wallpaper names on macOS fills up "Wallpaper > Your Pictures" area with many images when frequency is set high
