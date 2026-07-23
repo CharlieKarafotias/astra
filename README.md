@@ -43,7 +43,8 @@ astra --help
 _Utilize my homebrew tap to download and manage astra for you_
 ```bash
 brew tap charliekarafotias/tools
-brew install astra
+brew trust charliekarafotias/tools
+brew install charliekarafotias/tools/astra
 ```
 
 _If you prefer to build from source_
