@@ -1,5 +1,11 @@
 # Astra Release Notes
 
+## v1.3.1
+
+### Changes
+- Dependency bumps
+- README updates
+
 ## v1.3.0
 
 ### New Features
