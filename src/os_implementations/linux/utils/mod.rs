@@ -25,6 +25,58 @@ pub fn is_dark_mode_active() -> Result<bool, LinuxOSError> {
     Ok(output_str.contains("prefer-dark"))
 }
 
+/// Sync wallpaper functionality for Linux
+/// TODO: Implement get_current_wallpapers() - detect current wallpaper on each monitor
+/// TODO: Implement has_astra_wallpaper() - check if any monitor has an Astra wallpaper
+/// TODO: Implement get_astra_wallpaper_path() - get the path of the Astra wallpaper
+/// TODO: Implement sync_wallpapers() - sync all monitors to the same wallpaper
+///
+/// Notes:
+/// - On Linux, getting current wallpaper per monitor is complex and distro-dependent
+/// - GNOME uses gsettings with picture-uri/picture-uri-dark
+/// - KDE uses kwriteconfig5 with kcm_wallpaper
+/// - Other DEs have their own methods
+///
+/// Implementation approach:
+/// 1. Use xprop to get current wallpaper: xprop -root _NET_WM_BACKGROUND_FILE
+/// 2. Parse wallpaper URI to get path
+/// 3. Check if path ends with "astra_1.png" or "astra_2.png"
+/// 4. If Astra wallpaper detected, sync all monitors using gsettings
+
+pub fn get_current_wallpapers() -> Result<Vec<String>, LinuxOSError> {
+    // TODO: Implement getting current wallpapers
+    // Approach: Use xprop to get wallpaper info
+    // Command: xprop -root _NET_WM_BACKGROUND_FILE
+    // This is complex and may not work on all Linux distributions
+    todo!("Implement get_current_wallpapers() for Linux - requires distro-specific approach")
+}
+
+pub fn has_astra_wallpaper() -> Result<bool, LinuxOSError> {
+    // TODO: Implement checking for Astra wallpaper
+    todo!("Implement has_astra_wallpaper() for Linux")
+}
+
+pub fn get_astra_wallpaper_path() -> Result<Option<PathBuf>, LinuxOSError> {
+    // TODO: Implement getting Astra wallpaper path
+    todo!("Implement get_astra_wallpaper_path() for Linux")
+}
+
+/// Synchronizes all monitors to the same wallpaper
+/// If an Astra wallpaper is detected on any monitor, all monitors are synced to it
+/// If no Astra wallpaper is detected, a warning is logged and no changes are made
+pub fn sync_wallpapers(config: &Config) -> Result<(), LinuxOSError> {
+    // TODO: Implement sync functionality
+    //
+    // Implementation approach:
+    // 1. Check if any monitor has an Astra wallpaper
+    // 2. If yes, get the path and use gsettings to set it on all monitors
+    // 3. If no Astra wallpaper, log warning and return
+    //
+    // Note: On Linux, syncing wallpapers across monitors is not straightforward
+    // as each monitor may have its own wallpaper settings
+    todo!("Implement sync_wallpapers() for Linux - requires distro-specific approach")
+}
+
 /// Gets the resolution of the primary display. This relies on the `xrandr` command to
 /// determine the resolution.
 ///

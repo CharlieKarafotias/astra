@@ -63,6 +63,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(Commands::GenerateCompletions { shell }) => {
             generate(shell, &mut Cli::command(), "astra", &mut std::io::stdout());
         }
+        Some(Commands::Sync) => {
+            os_implementations::sync_wallpapers(&config)?;
+        }
         None => {
             // Since 'astra' was called, respect user config
             config.respect_user_config = true;

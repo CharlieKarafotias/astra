@@ -16,14 +16,73 @@ use windows::{
     core::PCWSTR,
 };
 
+// --- OS specific code ---
+/// Sync wallpaper functionality for Windows
+/// TODO: Implement get_current_wallpapers() - detect current wallpaper on each monitor
+/// TODO: Implement has_astra_wallpaper() - check if any monitor has an Astra wallpaper
+/// TODO: Implement get_astra_wallpaper_path() - get the path of the Astra wallpaper
+/// TODO: Implement sync_wallpapers() - sync all monitors to the same wallpaper
+/// 
+/// Notes:
+/// - On Windows, getting current wallpaper per monitor is complex
+/// - Windows 10/11 use a single wallpaper per session
+/// - Multiple monitors share the same wallpaper
+/// - Getting the wallpaper path requires reading from registry or using API calls
+/// 
+/// Implementation approach:
+/// 1. Use Windows API to get current wallpaper path
+/// 2. Check if wallpaper path ends with "astra_1.png" or "astra_2.png"
+/// 3. If Astra wallpaper detected, sync all monitors (they share wallpaper anyway)
+/// 4. If no Astra wallpaper, log warning and return
+
+pub fn get_current_wallpapers() -> Result<Vec<String>, WindowsError> {
+    // TODO: Implement getting current wallpapers
+    // Note: On Windows 10/11, all monitors share the same wallpaper
+    // Use SystemParametersInfo with SPI_GETDESKWALLPAPER
+    todo!("Implement get_current_wallpapers() for Windows")
+}
+
+pub fn has_astra_wallpaper() -> Result<bool, WindowsError> {
+    // TODO: Implement checking for Astra wallpaper
+    todo!("Implement has_astra_wallpaper() for Windows")
+}
+
+pub fn get_astra_wallpaper_path() -> Result<Option<PathBuf>, WindowsError> {
+    // TODO: Implement getting Astra wallpaper path
+    todo!("Implement get_astra_wallpaper_path() for Windows")
+}
+
+/// Synchronizes all monitors to the same wallpaper
+/// If an Astra wallpaper is detected, all monitors are synced to it
+/// If no Astra wallpaper is detected, a warning is logged and no changes are made
+pub fn sync_wallpapers(config: &Config) -> Result<(), WindowsError> {
+    // TODO: Implement sync functionality
+    // 
+    // Note: On Windows 10/11, all monitors share the same wallpaper
+    // So sync is not strictly necessary, but we can still check and ensure
+    // the wallpaper is set correctly if an Astra wallpaper is detected
+    //
+    // Implementation approach:
+    // 1. Check if any monitor has an Astra wallpaper
+    // 2. If yes, ensure it's set on all monitors (they share wallpaper anyway)
+    // 3. If no Astra wallpaper, log warning and return
+    todo!(
+        "Implement sync_wallpapers() for Windows - Windows monitors share wallpaper"
+    )
+}
+
+/// Sync wallpaper functionality for the frequency handler
+/// This function is called after the wallpaper check to ensure all monitors
+/// are synced if an Astra wallpaper is detected
+pub fn handle_sync(config: &Config) -> Result<(), WindowsError> {
+    // TODO: Call sync_wallpapers() when implemented for Windows
+    // For now, just log that sync is not yet implemented
+    config.print_if_verbose("Windows sync not yet implemented");
+    Ok(())
+}
+
 /// Checks if the user's OS is currently in dark mode
-///
-/// # Errors
-///
-/// Returns a `WindowsError` with the `DarkModeError` variant if the command to determine
-/// OS dark mode state cannot be executed. It can also return an error if the output
-/// cannot be parsed.
-pub(crate) fn is_dark_mode_active() -> Result<bool, WindowsError> {
+pub fn is_dark_mode_active() -> Result<bool, WindowsError> {
     let mut data: u32 = 0;
     let mut data_size = std::mem::size_of::<u32>() as u32;
 
@@ -47,12 +106,6 @@ pub(crate) fn is_dark_mode_active() -> Result<bool, WindowsError> {
 }
 
 /// Retrieves the resolution of the largest display in pixels.
-///
-/// # Errors
-///
-/// Returns a `WindowsError` with the `ScreenResolutionError` variant if the command to determine
-/// screen resolution cannot be executed. It can also return an error if the output
-/// cannot be parsed.
 pub(crate) fn get_screen_resolution() -> Result<(u32, u32), WindowsError> {
     let width = unsafe { GetSystemMetrics(SM_CXSCREEN) };
     let height = unsafe { GetSystemMetrics(SM_CYSCREEN) };
@@ -81,10 +134,6 @@ pub(crate) fn update_wallpaper(path: PathBuf) -> Result<(), WindowsError> {
 
 /// Opens the given file in the user's default editor. This function relies on the start
 /// command to open the file.
-///
-/// # Errors
-/// - Returns a `WindowsError` with the `OpenEditorError` variant if the command to open the
-/// file cannot be executed for any reason.
 pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsError> {
     config.print_if_verbose("Using default editor");
     Command::new("powershell")
@@ -97,12 +146,6 @@ pub(crate) fn open_editor(config: &Config, path: PathBuf) -> Result<(), WindowsE
 }
 
 /// CRUD operator function for interfacing with Windows task scheduler service
-///
-/// This function will take in the configuration struct and check if the user
-/// config contains a frequency key/value
-///
-/// - IF key/value is defined, take the frequency and ensure astra task is created/updated
-/// - IF key/value is not defined, ensure astra task is removed from scheduled tasks
 pub(crate) fn handle_frequency(config: &Config) -> Result<bool, WindowsError> {
     if let Some(frequency) = config.frequency() {
         install_astra_task(frequency)?;

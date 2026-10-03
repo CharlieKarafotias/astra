@@ -56,6 +56,8 @@ pub enum Commands {
         #[arg(value_enum)]
         shell: Shell,
     },
+    /// Synchronizes wallpapers across all monitors
+    Sync,
 }
 
 #[derive(Clone, Debug, PartialEq, Subcommand)]

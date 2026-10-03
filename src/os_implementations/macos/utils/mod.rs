@@ -14,6 +14,67 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env::var, path::PathBuf, process::Command};
 
 // --- OS specific code ---
+/// Gets the current wallpaper path for each monitor
+/// Returns a vector of wallpaper paths (one per monitor)
+pub fn get_current_wallpapers() -> Result<Vec<String>, MacOSError> {
+    todo!("Implement me using similar logic to is_astra_1_wallpaper");
+}
+
+/// Checks if any of the current wallpapers is an Astra wallpaper
+/// Returns true if an Astra wallpaper is detected
+pub fn has_astra_wallpaper() -> Result<bool, MacOSError> {
+    let wallpapers = get_current_wallpapers()?;
+    Ok(wallpapers
+        .iter()
+        .any(|p| p.ends_with("astra_1.png") || p.ends_with("astra_2.png")))
+}
+
+/// Gets the Astra wallpaper path if one exists, otherwise returns an error
+pub fn get_astra_wallpaper_path() -> Result<Option<PathBuf>, MacOSError> {
+    let wallpapers = get_current_wallpapers()?;
+    for wallpaper in &wallpapers {
+        if wallpaper.ends_with("astra_1.png") || wallpaper.ends_with("astra_2.png") {
+            return Ok(Some(PathBuf::from(wallpaper)));
+        }
+    }
+    Ok(None)
+}
+
+/// Synchronizes all monitors to the same wallpaper
+/// If an Astra wallpaper is detected on any monitor, all monitors are synced to it
+/// If no Astra wallpaper is detected, a warning is logged and no changes are made
+pub fn sync_wallpapers(config: &Config) -> Result<(), MacOSError> {
+    let wallpapers = get_current_wallpapers()?;
+
+    // Check if we have any monitors
+    if wallpapers.is_empty() {
+        config.print_if_verbose("No monitors found to sync");
+        return Ok(());
+    }
+
+    // Check if any monitor has an Astra wallpaper
+    if !has_astra_wallpaper()? {
+        config.print_if_verbose("No Astra wallpaper detected on any monitor");
+        config.print_if_verbose("Skipping sync - leaving current wallpapers unchanged");
+        return Ok(());
+    }
+
+    // Get the Astra wallpaper path
+    let astra_path = get_astra_wallpaper_path()?
+        .ok_or_else(|| MacOSError::OS("Astra wallpaper detected but path not found".to_string()))?;
+
+    config.print_if_verbose(&format!(
+        "Detected Astra wallpaper: {}",
+        astra_path.display()
+    ));
+    config.print_if_verbose(&format!("Syncing {} monitors...", wallpapers.len()));
+
+    // Use the existing update_wallpaper function to sync all monitors
+    update_wallpaper(astra_path)?;
+
+    config.print_if_verbose("Successfully synced all monitors");
+    Ok(())
+}
 
 /// Checks if the user's OS is currently in dark mode
 ///
@@ -74,10 +135,10 @@ fn is_astra_1_wallpaper(workspace: &NSWorkspace, screens: &NSArray<NSScreen>) ->
         let a = workspace.desktopImageURLForScreen(&screen);
         if let Some(url) = a {
             let path = url.path();
-            if let Some(path) = path {
-                if path.hasSuffix(&NSString::from_str("astra_1.png")) {
-                    res = true;
-                }
+            if let Some(path) = path
+                && path.hasSuffix(&NSString::from_str("astra_1.png"))
+            {
+                res = true;
             }
         }
     }
