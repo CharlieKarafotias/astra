@@ -77,9 +77,12 @@ with a warning (TODO: partial processing).
   modules (dark-mode detection, resolution, `update_wallpaper`, schedulers).
 
 Wallpapers are saved to `<data_dir>/Wallpapers/` as `<prefix>_<unix_timestamp>.png`
-(macOS alternates `astra_1.png`/`astra_2.png` to defeat caching). `julia`/`solid`
-use dark-mode-aware palettes via per-OS detection. Linux wallpaper support is
-GNOME-only.
+on all platforms. `julia`/`solid` use dark-mode-aware palettes via per-OS
+detection. Linux wallpaper support is GNOME-only. On macOS, auto-clean and
+`astra clean` also prune entries for deleted wallpapers from the system wallpaper
+manifest (`~/Library/Application Support/com.apple.wallpaper/Store/aerials/manifest/entries.json`);
+pruned entries disappear from System Settings → Wallpaper after the next restart,
+since macOS caches the manifest in memory.
 
 ## 4. Releases
 

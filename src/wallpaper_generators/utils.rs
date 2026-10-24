@@ -6,11 +6,12 @@ use crate::cli::Generator;
 use crate::os_implementations::update_wallpaper;
 use directories::ProjectDirs;
 use image::{ImageBuffer, Rgb};
+use serde_json::Value;
 use std::{
     error::Error,
     fmt,
-    fs::{create_dir_all, read_dir, remove_dir_all, remove_file},
-    path::PathBuf,
+    fs::{create_dir_all, read_dir, read_to_string, remove_dir_all, remove_file, rename, write},
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -60,6 +61,9 @@ pub fn delete_wallpapers(
         config.print_if_verbose(
             "WARN: wallpaper directory does not exist. Skipping wallpaper cleanup",
         );
+        // The directory being gone means every Astra manifest entry is stale.
+        #[cfg(target_os = "macos")]
+        crate::os_implementations::prune_stale_wallpaper_manifest_entries(config, &path);
         return Ok(());
     }
 
@@ -119,7 +123,193 @@ pub fn delete_wallpapers(
         }
     }
 
+    // On macOS, also prune stale Astra entries from the system wallpaper manifest.
+    // This never fails the clean; see prune_stale_wallpaper_manifest_entries.
+    #[cfg(target_os = "macos")]
+    crate::os_implementations::prune_stale_wallpaper_manifest_entries(config, &path);
+
     Ok(())
+}
+
+/// Removes entries from a macOS wallpaper manifest file that reference Astra
+/// wallpapers which no longer exist on disk.
+///
+/// The manifest is a JSON document of undocumented shape. Rather than assume a
+/// schema, this walks the JSON and drops any entry object (an element of an array,
+/// or a value in an object) that directly references a file under `wallpapers_dir`
+/// which no longer exists. Entries referencing files that still exist — including
+/// the currently-set wallpaper — and entries for other apps are always kept, and
+/// unrecognized shapes are left untouched.
+///
+/// The manifest is only rewritten when at least one entry was removed, and the
+/// rewrite is atomic (temporary file + rename) so a failure cannot corrupt it.
+///
+/// Returns the number of entries removed. This never fails the caller: a missing
+/// file, unparsable JSON, or I/O error is reported via verbose logging and yields
+/// 0, because the manifest format is undocumented and must never break a clean.
+// Only called from the macOS implementation; on other targets this entry point
+// (and the helpers below, reachable only from it) is intentionally unused.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn prune_wallpaper_manifest_file(
+    config: &Config,
+    manifest_path: &Path,
+    wallpapers_dir: &Path,
+) -> usize {
+    let manifest_contents = match read_to_string(manifest_path) {
+        Ok(contents) => contents,
+        Err(e) => {
+            config.print_if_verbose(
+                format!("WARN: could not read wallpaper manifest, skipping manifest cleanup: {e}")
+                    .as_str(),
+            );
+            return 0;
+        }
+    };
+    let mut manifest: Value = match serde_json::from_str(&manifest_contents) {
+        Ok(manifest) => manifest,
+        Err(e) => {
+            config.print_if_verbose(
+                format!("WARN: could not parse wallpaper manifest, skipping manifest cleanup: {e}")
+                    .as_str(),
+            );
+            return 0;
+        }
+    };
+
+    let removed = prune_stale_manifest_entries(&mut manifest, wallpapers_dir);
+    if removed == 0 {
+        return 0;
+    }
+
+    let serialized = match serde_json::to_string_pretty(&manifest) {
+        Ok(serialized) => serialized,
+        Err(e) => {
+            config.print_if_verbose(
+                format!(
+                    "WARN: could not serialize pruned wallpaper manifest, leaving it unchanged: {e}"
+                )
+                .as_str(),
+            );
+            return 0;
+        }
+    };
+    let temp_path = manifest_path.with_extension("json.tmp");
+    if let Err(e) = write(&temp_path, serialized).and_then(|()| rename(&temp_path, manifest_path)) {
+        let _ = remove_file(&temp_path);
+        config.print_if_verbose(
+            format!("WARN: could not update wallpaper manifest, leaving it unchanged: {e}")
+                .as_str(),
+        );
+        return 0;
+    }
+
+    config.print_if_verbose(
+        format!("Removed {removed} stale Astra entries from wallpaper manifest").as_str(),
+    );
+    removed
+}
+
+/// Recursively drops entry objects that directly reference a file under
+/// `wallpapers_dir` which no longer exists. Returns the number removed.
+///
+/// Only objects that directly hold a stale Astra path as one of their values are
+/// dropped. This keeps the pruning conservative: containers holding a mix of stale
+/// and fresh entries (e.g. a category with an items array) have only their stale
+/// items removed, rather than dropping the whole container.
+// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn prune_stale_manifest_entries(value: &mut Value, wallpapers_dir: &Path) -> usize {
+    match value {
+        Value::Array(items) => {
+            let mut removed = 0;
+            items.retain_mut(|item| {
+                if is_stale_astra_entry(item, wallpapers_dir) {
+                    removed += 1;
+                    false
+                } else {
+                    removed += prune_stale_manifest_entries(item, wallpapers_dir);
+                    true
+                }
+            });
+            removed
+        }
+        Value::Object(map) => {
+            let mut removed = 0;
+            map.retain(|_, entry| {
+                if is_stale_astra_entry(entry, wallpapers_dir) {
+                    removed += 1;
+                    false
+                } else {
+                    removed += prune_stale_manifest_entries(entry, wallpapers_dir);
+                    true
+                }
+            });
+            removed
+        }
+        _ => 0,
+    }
+}
+
+/// Whether `value` is an object that directly references, as one of its values, a
+/// file under `wallpapers_dir` which no longer exists.
+// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn is_stale_astra_entry(value: &Value, wallpapers_dir: &Path) -> bool {
+    match value {
+        Value::Object(map) => map.values().any(|entry_value| match entry_value {
+            Value::String(path_str) => is_stale_astra_path(path_str, wallpapers_dir),
+            _ => false,
+        }),
+        _ => false,
+    }
+}
+
+/// Whether `path_str` refers to a file under `wallpapers_dir` which no longer
+/// exists. Manifest paths may be plain paths or `file://` URLs (possibly
+/// percent-encoded), so both forms are normalized before comparing.
+// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn is_stale_astra_path(path_str: &str, wallpapers_dir: &Path) -> bool {
+    let path = normalize_manifest_path(path_str);
+    path.starts_with(wallpapers_dir) && !path.exists()
+}
+
+/// Normalizes a manifest path string into a filesystem path: strips a `file://`
+/// scheme (including a `localhost` host) and percent-decodes `%XX` sequences.
+// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn normalize_manifest_path(path_str: &str) -> PathBuf {
+    let without_scheme = path_str.strip_prefix("file://").unwrap_or(path_str);
+    let decoded = percent_decode(without_scheme);
+    let without_host = decoded
+        .strip_prefix("localhost/")
+        .map(|rest| format!("/{rest}"))
+        .unwrap_or(decoded);
+    PathBuf::from(without_host)
+}
+
+/// Decodes `%XX` hex sequences in `input`, leaving anything else (including
+/// malformed sequences) untouched.
+// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(hex) = std::str::from_utf8(&bytes[i + 1..i + 3])
+            && let Ok(byte) = u8::from_str_radix(hex, 16)
+        {
+            decoded.push(byte);
+            i += 3;
+            continue;
+        }
+        decoded.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 pub fn handle_generate_options(
@@ -409,6 +599,168 @@ mod tests {
         assert_eq!(color_map.len(), 256);
         assert_eq!(color_map[0], [255, 0, 0]);
         assert_eq!(color_map[255], [0, 255, 0]);
+    }
+
+    fn manifest_test_wallpapers_dir() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("Wallpapers")).unwrap();
+        dir
+    }
+
+    #[test]
+    fn test_prune_stale_manifest_entries_array_shape() {
+        let dir = manifest_test_wallpapers_dir();
+        let wallpapers_dir = dir.path().join("Wallpapers");
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
+        let stale = wallpapers_dir.join("julia_1600000000.png");
+        let other_app = "/somewhere/else/old.png".to_string();
+
+        let mut manifest = serde_json::json!([
+            { "path": stale.to_string_lossy() },
+            { "path": kept.to_string_lossy() },
+            { "path": other_app },
+        ]);
+        let removed = prune_stale_manifest_entries(&mut manifest, &wallpapers_dir);
+        assert_eq!(removed, 1);
+        let items = manifest.as_array().unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0]["path"].as_str().unwrap(), kept.to_str().unwrap());
+        assert_eq!(items[1]["path"].as_str().unwrap(), other_app);
+    }
+
+    #[test]
+    fn test_prune_stale_manifest_entries_map_shape() {
+        let dir = manifest_test_wallpapers_dir();
+        let wallpapers_dir = dir.path().join("Wallpapers");
+        let stale = wallpapers_dir.join("julia_1600000000.png");
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
+
+        let mut manifest = serde_json::json!({
+            "id-stale": { "url": stale.to_string_lossy() },
+            "id-kept": { "url": kept.to_string_lossy() },
+        });
+        let removed = prune_stale_manifest_entries(&mut manifest, &wallpapers_dir);
+        assert_eq!(removed, 1);
+        let map = manifest.as_object().unwrap();
+        assert!(!map.contains_key("id-stale"));
+        assert!(map.contains_key("id-kept"));
+    }
+
+    #[test]
+    fn test_prune_stale_manifest_entries_nested_category_kept() {
+        let dir = manifest_test_wallpapers_dir();
+        let wallpapers_dir = dir.path().join("Wallpapers");
+        let stale = wallpapers_dir.join("julia_1600000000.png");
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
+
+        let mut manifest = serde_json::json!({
+            "categories": [
+                {
+                    "name": "Astra",
+                    "items": [
+                        { "path": stale.to_string_lossy() },
+                        { "path": kept.to_string_lossy() },
+                    ],
+                },
+            ],
+        });
+        let removed = prune_stale_manifest_entries(&mut manifest, &wallpapers_dir);
+        assert_eq!(removed, 1);
+        let items = manifest["categories"][0]["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["path"].as_str().unwrap(), kept.to_str().unwrap());
+    }
+
+    #[test]
+    fn test_prune_stale_manifest_entries_file_url_and_percent_encoding() {
+        let dir = manifest_test_wallpapers_dir();
+        let wallpapers_dir = dir.path().join("Wallpapers");
+        let kept = wallpapers_dir.join("my wall.png");
+        std::fs::write(&kept, b"").unwrap();
+        let stale_url = format!("file://{}/old%20wall.png", wallpapers_dir.to_string_lossy());
+        // Kept entry is percent-encoded too, so decoding is required to keep it.
+        let kept_url = format!("file://{}", kept.to_string_lossy().replace(' ', "%20"));
+
+        let mut manifest = serde_json::json!([
+            { "path": stale_url },
+            { "path": kept_url },
+        ]);
+        let removed = prune_stale_manifest_entries(&mut manifest, &wallpapers_dir);
+        assert_eq!(removed, 1);
+        let items = manifest.as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["path"].as_str().unwrap(), kept_url);
+    }
+
+    #[test]
+    fn test_prune_wallpaper_manifest_file_end_to_end() {
+        let dir = manifest_test_wallpapers_dir();
+        let wallpapers_dir = dir.path().join("Wallpapers");
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
+        let stale = wallpapers_dir.join("julia_1600000000.png");
+
+        let manifest_path = dir.path().join("entries.json");
+        std::fs::write(
+            &manifest_path,
+            serde_json::json!([
+                { "path": stale.to_string_lossy() },
+                { "path": kept.to_string_lossy() },
+            ])
+            .to_string(),
+        )
+        .unwrap();
+
+        let config = Config::new(false);
+        let removed = prune_wallpaper_manifest_file(&config, &manifest_path, &wallpapers_dir);
+        assert_eq!(removed, 1);
+        let updated: Value =
+            serde_json::from_str(&std::fs::read_to_string(&manifest_path).unwrap()).unwrap();
+        let items = updated.as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["path"].as_str().unwrap(), kept.to_str().unwrap());
+    }
+
+    #[test]
+    fn test_prune_wallpaper_manifest_file_leaves_clean_manifest_untouched() {
+        let dir = manifest_test_wallpapers_dir();
+        let wallpapers_dir = dir.path().join("Wallpapers");
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
+
+        let manifest_path = dir.path().join("entries.json");
+        let original = serde_json::json!([{ "path": kept.to_string_lossy() }]).to_string();
+        std::fs::write(&manifest_path, &original).unwrap();
+
+        let config = Config::new(false);
+        let removed = prune_wallpaper_manifest_file(&config, &manifest_path, &wallpapers_dir);
+        assert_eq!(removed, 0);
+        assert_eq!(std::fs::read_to_string(&manifest_path).unwrap(), original);
+    }
+
+    #[test]
+    fn test_prune_wallpaper_manifest_file_missing_and_invalid() {
+        let dir = manifest_test_wallpapers_dir();
+        let wallpapers_dir = dir.path().join("Wallpapers");
+        let config = Config::new(false);
+
+        let missing = dir.path().join("does-not-exist.json");
+        assert_eq!(
+            prune_wallpaper_manifest_file(&config, &missing, &wallpapers_dir),
+            0
+        );
+        assert!(!missing.exists());
+
+        let invalid = dir.path().join("invalid.json");
+        std::fs::write(&invalid, b"{not json").unwrap();
+        assert_eq!(
+            prune_wallpaper_manifest_file(&config, &invalid, &wallpapers_dir),
+            0
+        );
+        assert_eq!(std::fs::read_to_string(&invalid).unwrap(), "{not json");
     }
 }
 // --- Tests ---

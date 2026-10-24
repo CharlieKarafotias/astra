@@ -11,3 +11,6 @@ pub use solid_color::{Color, generate_solid_color};
 pub use utils::{
     AstraImage, WallpaperGeneratorError, average_color, delete_wallpapers, handle_generate_options,
 };
+// Only the macOS implementation prunes the wallpaper manifest.
+#[cfg(target_os = "macos")]
+pub use utils::prune_wallpaper_manifest_file;

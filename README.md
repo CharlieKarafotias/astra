@@ -107,6 +107,16 @@ astra clean
 astra --help
 ```
 
+### macOS notes
+
+macOS sets each generated wallpaper by its unique file name, just like other
+platforms. When auto-clean (`auto_clean` in the config) or `astra clean`
+deletes old wallpapers, Astra also removes their stale entries from macOS's
+wallpaper manifest
+(`~/Library/Application Support/com.apple.wallpaper/Store/aerials/manifest/entries.json`).
+Because macOS caches that manifest in memory, removed entries disappear from
+System Settings → Wallpaper after your next restart.
+
 ### ⚙️ Configuration File
 
 Astra supports an optional JSON configuration file that allows you to customize
