@@ -464,8 +464,8 @@ fn retrieve_last_execution_time() -> Result<u64, MacOSError> {
     let timestamp = if path_to_time_stamp_file.exists() {
         fs::read_to_string(&path_to_time_stamp_file)
             .map_err(|e| MacOSError::OS(format!("failed to read last_exec.txt: {e}")))?
-            .splitn(2, "=")
-            .nth(1)
+            .split_once('=')
+            .map(|(_, value)| value)
             .expect("should be a time stamp")
             .trim()
             .parse::<u64>()

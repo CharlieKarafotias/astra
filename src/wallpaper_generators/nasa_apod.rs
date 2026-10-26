@@ -403,7 +403,7 @@ impl ApodDate {
     fn earliest() -> Self {
         ApodDate {
             year: 95,
-            month: 06,
+            month: 6,
             day: 20,
         }
     }
@@ -515,12 +515,12 @@ pub fn parse_yymmdd(s: &str) -> Result<ApodDate, ApodDateError> {
         .parse::<u32>()
         .map_err(|e| ApodDateError::InvalidDay(e.to_string()))?;
 
-    if month < 1 || month > 12 {
+    if !(1..=12).contains(&month) {
         return Err(ApodDateError::InvalidMonth(
             "Month must be between 01 and 12".to_string(),
         ));
     }
-    if day < 1 || day > 31 {
+    if !(1..=31).contains(&day) {
         return Err(ApodDateError::InvalidDay(
             "Day must be between 01 and 31".to_string(),
         ));

@@ -190,7 +190,7 @@ impl Config {
         let config_path = Config::config_path();
         if config_path.exists() {
             if verbose {
-                println!("reading configuration file at {}", &config_path.display());
+                println!("reading configuration file at {}", config_path.display());
             }
             let config = Self::read_config_file(&config_path, verbose)?;
             if verbose {

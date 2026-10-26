@@ -114,7 +114,7 @@ fn extract_interval(output: &[u8]) -> Option<u64> {
         .find(|l| l.contains("run interval"))
         // example line: run interval = 600 seconds
         .and_then(|l| l.split_once('=').map(|x| x.1))
-        .and_then(|l| l.trim().split_whitespace().next())
+        .and_then(|l| l.split_whitespace().next())
         .and_then(|n| n.parse::<u64>().ok())
 }
 

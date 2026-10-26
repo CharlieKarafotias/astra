@@ -93,7 +93,7 @@ pub fn delete_wallpapers(
             .map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?
             .as_secs();
         let older_than_sec = frequency.to_seconds();
-        config.print_if_verbose(format!("Deleting images older than {}", &frequency).as_str());
+        config.print_if_verbose(format!("Deleting images older than {}", frequency).as_str());
         let oldest_timestamp_to_keep = now - older_than_sec;
         for entry in read_dir(&path).map_err(|e| WallpaperGeneratorError::OS(e.to_string()))? {
             let entry = entry.map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;

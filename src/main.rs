@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             no_save,
             no_update,
         }) => {
-            config.print_if_verbose(format!("Generating image of type: {:?}...", &image).as_str());
+            config.print_if_verbose(format!("Generating image of type: {:?}...", image).as_str());
             let image_buf = match &image {
                 Generator::Julia => generate_julia_set(&config),
                 Generator::NasaAPOD { date, random } => generate_nasa_apod(&config, date, *random),

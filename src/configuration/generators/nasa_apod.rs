@@ -14,18 +14,10 @@ pub struct NasaApodConfig {
 
 impl NasaApodConfig {
     pub fn date_from(&self) -> Option<String> {
-        if let Some(d) = &self.date_from {
-            Some(d.to_string())
-        } else {
-            None
-        }
+        self.date_from.as_ref().map(|d| d.to_string())
     }
     pub fn date_to(&self) -> Option<String> {
-        if let Some(d) = &self.date_to {
-            Some(d.to_string())
-        } else {
-            None
-        }
+        self.date_to.as_ref().map(|d| d.to_string())
     }
 }
 
