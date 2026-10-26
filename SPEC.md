@@ -43,7 +43,7 @@ themes via config. Generators can opt into `respect_color_themes`.
 - `astra` — auto mode (config-driven).
 - `astra generate <generator> [--no-save] [--no-update]` — explicit generation;
   bypasses global config (frequency, generator list) but honors per-generator options.
-  - `nasa-apod [--date YYMMDD]`
+  - `nasa-apod [YYMMDD] [--random]`
   - `solid <color <name>|random|rgb <r> <g> <b>>`
 - `astra clean [--older-than <freq>] [--directory]` — delete cached wallpapers.
 - `astra config [--open]` — create/print config path; `--open` opens it in `$EDITOR`.
