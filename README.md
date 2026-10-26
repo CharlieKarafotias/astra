@@ -107,6 +107,19 @@ astra clean
 astra --help
 ```
 
+### macOS notes
+
+macOS sets each generated wallpaper by its unique file name, just like other
+platforms. macOS also keeps every image set this way in System Settings →
+Wallpaper → "Your Photos", even after the file is deleted. When auto-clean
+(`auto_clean` in the config) or `astra clean` deletes old wallpapers, Astra also
+removes those stale Astra entries and their cached thumbnails from the gallery.
+Astra then restarts WallpaperAgent and the image wallpaper extension so the
+gallery updates immediately. If System Settings is open at the time, it can
+briefly re-show removed entries until it refreshes; the next clean removes them
+again. Only entries pointing at deleted Astra wallpapers are touched — your other
+photos and the current wallpaper are left alone.
+
 ### ⚙️ Configuration File
 
 Astra supports an optional JSON configuration file that allows you to customize
