@@ -49,10 +49,10 @@ Units include seconds (`s`), minutes (`m`), hours (`h`), days (`d`), weeks (`w`)
 **Example:** `"1w"`  
 **Default:** Never runs unless the user explicitly calls `astra clean`.
 
-On macOS, auto-clean (and `astra clean`) also removes the deleted wallpapers'
-stale entries from the system wallpaper manifest. Because macOS caches that
-manifest in memory, the entries disappear from System Settings → Wallpaper
-after your next restart.
+On macOS, auto-clean (and `astra clean`) also removes deleted Astra wallpapers
+from the System Settings wallpaper gallery ("Your Photos"), including their cached
+thumbnails. Astra then restarts WallpaperAgent and the image wallpaper extension so
+the gallery refreshes immediately.
 
 ---
 

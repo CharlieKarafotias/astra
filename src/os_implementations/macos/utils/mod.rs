@@ -86,9 +86,10 @@ pub fn get_screen_resolution() -> Result<(u32, u32), MacOSError> {
 /// files (`astra_1.png`/`astra_2.png`) because re-setting the same path could leave a
 /// stale cached image on screen. That workaround is no longer needed: every render
 /// already has a unique timestamped name, so macOS always sees a new path. The
-/// System Settings picker entries that unique names accumulate are cleaned up
-/// separately by auto-clean (see `prune_stale_wallpaper_manifest_entries`), and
-/// disappear from the picker after the next restart.
+/// System Settings → Wallpaper → "Your Photos" entries that unique names
+/// accumulate are cleaned up separately by auto-clean (see
+/// `prune_stale_wallpaper_gallery_entries`), which also restarts the wallpaper
+/// agents so the gallery refreshes immediately.
 ///
 /// # Platform
 ///
@@ -130,45 +131,143 @@ pub fn update_wallpaper(path: PathBuf) -> Result<(), MacOSError> {
     })
 }
 
-/// Path to the macOS wallpaper manifest that tracks wallpapers registered with the
-/// system wallpaper service (used for Lock Screen support and the System Settings
-/// picker). Returns `None` if the user's home directory cannot be determined.
-fn wallpaper_manifest_path() -> Option<PathBuf> {
+/// Path to the WallpaperAgent view-model cache for desktop image wallpapers.
+///
+/// This cache backs System Settings → Wallpaper → "Your Photos". It lives in the
+/// per-user Darwin cache directory, which is a sibling of `TMPDIR` (`.../C/` next
+/// to `.../T/`). Returns `None` if the cache does not exist yet.
+fn wallpaper_gallery_path() -> Option<PathBuf> {
+    let cache_root = std::env::temp_dir().parent()?.join("C");
+    let path = cache_root.join(
+        "com.apple.wallpaper.agent/com.apple.wallpaper.view-model-cache\
+         /extension-com.apple.wallpaper.extension.image-desktop",
+    );
+    path.is_file().then_some(path)
+}
+
+/// Directory holding the per-entry thumbnail images referenced by the wallpaper
+/// gallery cache and the extension's history (`copyURL`). Thumbnails are only ever
+/// deleted from inside this directory. Returns `None` if the user's home directory
+/// cannot be determined.
+fn wallpaper_gallery_thumbnails_dir() -> Option<PathBuf> {
     UserDirs::new().map(|dirs| {
-        dirs.home_dir().join(
-            "Library/Application Support/com.apple.wallpaper/Store/aerials/manifest/entries.json",
-        )
+        dirs.home_dir()
+            .join("Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches")
     })
 }
 
-/// Removes stale Astra entries from the macOS wallpaper manifest.
+/// Path to the image wallpaper extension's preferences plist. It persists the
+/// "Your Photos" image history that the System Settings gallery is rebuilt from.
+/// Returns `None` if the file does not exist yet (the extension has never shown an
+/// image on this machine).
+fn wallpaper_gallery_history_path() -> Option<PathBuf> {
+    UserDirs::new()
+        .map(|dirs| {
+            dirs.home_dir().join(
+                "Library/Containers/com.apple.wallpaper.extension.image/Data/Library\
+                 /Preferences/com.apple.wallpaper.extension.image.plist",
+            )
+        })
+        .filter(|path| path.is_file())
+}
+
+/// Removes stale Astra entries from the macOS System Settings wallpaper gallery.
 ///
-/// macOS registers every wallpaper set on the system with its wallpaper service, and
-/// those registrations persist in the wallpaper manifest even after Astra deletes the
-/// underlying image files. Left alone, System Settings → Wallpaper accumulates an
-/// entry for every render. Auto-clean therefore prunes manifest entries that point
-/// at Astra wallpapers which no longer exist on disk.
+/// macOS keeps two copies of that history:
+/// - WallpaperAgent's view-model cache, which renders System Settings → Wallpaper →
+///   "Your Photos" (`prune_wallpaper_gallery_file`);
+/// - the image wallpaper extension's `ChoiceRequests.ImageFiles` history, from
+///   which WallpaperAgent rebuilds the gallery
+///   (`prune_wallpaper_extension_image_files`).
 ///
-/// This function never fails a clean: a missing or unparsable manifest, or any I/O
-/// error, is reported via verbose logging and skipped, because the manifest format
-/// is undocumented and must never break wallpaper generation or deletion.
+/// Both must be pruned, and the wallpaper services must be stopped first: the image
+/// extension keeps the full history in memory and writes it back when it exits, so
+/// pruning while it runs would be undone by that final write. The services are
+/// `SIGSTOP`ped while the files are rewritten and `SIGKILL`ed afterwards so that
+/// in-memory history is discarded, and launchd relaunches them with the pruned files.
 ///
-/// NOTE: WallpaperAgent caches the manifest in memory, so pruned entries only
-/// disappear from System Settings → Wallpaper after the next restart (or after
-/// WallpaperAgent restarts). This function deliberately does not restart any system
-/// service; the restart is left to the user.
-pub fn prune_stale_wallpaper_manifest_entries(config: &Config, wallpapers_dir: &Path) {
-    let Some(manifest_path) = wallpaper_manifest_path() else {
-        config.print_if_verbose(
-            "WARN: could not determine wallpaper manifest path, skipping manifest cleanup",
-        );
-        return;
-    };
-    crate::wallpaper_generators::prune_wallpaper_manifest_file(
-        config,
-        &manifest_path,
+/// The services are only stopped when there is something to prune, so a clean that
+/// has nothing to remove does not disturb the running wallpaper. An open System
+/// Settings window can still re-add just-pruned entries from its own copy of the
+/// history; the next clean (for example the next auto-clean) removes them again.
+///
+/// This never fails a clean: missing or unparsable files, or any I/O error, are
+/// reported via verbose logging and skipped, because these formats are undocumented
+/// and must never break wallpaper generation or deletion.
+pub fn prune_stale_wallpaper_gallery_entries(config: &Config, wallpapers_dir: &Path) {
+    let gallery_path = wallpaper_gallery_path();
+    let history_path = wallpaper_gallery_history_path();
+    if !crate::wallpaper_generators::wallpaper_gallery_has_stale_entries(
+        gallery_path.as_deref(),
+        history_path.as_deref(),
         wallpapers_dir,
-    );
+    ) {
+        return;
+    }
+
+    // Freeze the services while their files are rewritten, then kill them on drop so
+    // launchd restarts them with the pruned state.
+    let _frozen = FrozenWallpaperAgents::new(config);
+
+    let thumbnails_dir = wallpaper_gallery_thumbnails_dir();
+    if let Some(gallery_path) = &gallery_path {
+        crate::wallpaper_generators::prune_wallpaper_gallery_file(
+            config,
+            gallery_path,
+            wallpapers_dir,
+            thumbnails_dir.as_deref(),
+        );
+    }
+    if let Some(history_path) = &history_path {
+        crate::wallpaper_generators::prune_wallpaper_extension_image_files(
+            config,
+            history_path,
+            wallpapers_dir,
+            thumbnails_dir.as_deref(),
+        );
+    }
+}
+
+/// Freezes the two macOS wallpaper services so they cannot restore the pruned
+/// history, and kills them when dropped.
+///
+/// WallpaperImageExtension keeps the full image history in memory and writes it
+/// back when it exits, so it must not be allowed to flush while the history is
+/// pruned. `SIGSTOP` also keeps launchd from relaunching it mid-prune (a stopped
+/// process still counts as running); `SIGKILL` then discards its in-memory state
+/// without a flush, and launchd relaunches both services with the pruned files.
+///
+/// The kill happens in `Drop` so a panic while pruning still leaves working
+/// wallpaper services behind.
+struct FrozenWallpaperAgents;
+
+impl FrozenWallpaperAgents {
+    fn new(config: &Config) -> Self {
+        config.print_if_verbose("Stopping macOS wallpaper services to prune the wallpaper gallery");
+        if let Err(e) = Command::new("killall")
+            .args(["-STOP", "WallpaperImageExtension", "WallpaperAgent"])
+            .status()
+        {
+            config.print_if_verbose(
+                format!(
+                    "WARN: could not stop the macOS wallpaper services: {e}; the gallery will refresh after the next login"
+                )
+                .as_str(),
+            );
+        }
+        Self
+    }
+}
+
+impl Drop for FrozenWallpaperAgents {
+    fn drop(&mut self) {
+        // Let cfprefsd notice the rewritten preference files before the services
+        // restart and read them.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let _ = Command::new("killall")
+            .args(["-9", "WallpaperImageExtension", "WallpaperAgent"])
+            .status();
+    }
 }
 
 /// Opens the given file in the user's default editor.

@@ -79,10 +79,21 @@ with a warning (TODO: partial processing).
 Wallpapers are saved to `<data_dir>/Wallpapers/` as `<prefix>_<unix_timestamp>.png`
 on all platforms. `julia`/`solid` use dark-mode-aware palettes via per-OS
 detection. Linux wallpaper support is GNOME-only. On macOS, auto-clean and
-`astra clean` also prune entries for deleted wallpapers from the system wallpaper
-manifest (`~/Library/Application Support/com.apple.wallpaper/Store/aerials/manifest/entries.json`);
-pruned entries disappear from System Settings → Wallpaper after the next restart,
-since macOS caches the manifest in memory.
+`astra clean` also remove deleted Astra wallpapers from the System Settings
+wallpaper gallery ("Your Photos"), including their cached thumbnails. The
+WallpaperAgent and image wallpaper extension processes are restarted so the
+gallery refreshes immediately.
+
+The gallery is backed by two undocumented stores that both have to be pruned:
+WallpaperAgent's view-model cache
+(`$TMPDIR/../C/com.apple.wallpaper.agent/com.apple.wallpaper.view-model-cache/extension-com.apple.wallpaper.extension.image-desktop`)
+and the image extension's history
+(`~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist`,
+`ChoiceRequests.ImageFiles`). Thumbnails live under
+`~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches`.
+Astra prunes only entries that point at missing files inside its own wallpapers
+directory; everything else (including bookmark data and timestamps of kept
+entries) is left untouched.
 
 ## 4. Releases
 

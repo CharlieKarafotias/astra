@@ -6,11 +6,11 @@ use crate::cli::Generator;
 use crate::os_implementations::update_wallpaper;
 use directories::ProjectDirs;
 use image::{ImageBuffer, Rgb};
-use serde_json::Value;
+use plist::Value;
 use std::{
     error::Error,
     fmt,
-    fs::{create_dir_all, read_dir, read_to_string, remove_dir_all, remove_file, rename, write},
+    fs::{self, create_dir_all, read_dir, remove_dir_all, remove_file, rename},
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -61,9 +61,9 @@ pub fn delete_wallpapers(
         config.print_if_verbose(
             "WARN: wallpaper directory does not exist. Skipping wallpaper cleanup",
         );
-        // The directory being gone means every Astra manifest entry is stale.
+        // The directory being gone means every Astra gallery entry is stale.
         #[cfg(target_os = "macos")]
-        crate::os_implementations::prune_stale_wallpaper_manifest_entries(config, &path);
+        crate::os_implementations::prune_stale_wallpaper_gallery_entries(config, &path);
         return Ok(());
     }
 
@@ -123,162 +123,360 @@ pub fn delete_wallpapers(
         }
     }
 
-    // On macOS, also prune stale Astra entries from the system wallpaper manifest.
-    // This never fails the clean; see prune_stale_wallpaper_manifest_entries.
+    // On macOS, also prune stale Astra entries from the System Settings wallpaper
+    // gallery. This never fails the clean; see prune_stale_wallpaper_gallery_entries.
     #[cfg(target_os = "macos")]
-    crate::os_implementations::prune_stale_wallpaper_manifest_entries(config, &path);
+    crate::os_implementations::prune_stale_wallpaper_gallery_entries(config, &path);
 
     Ok(())
 }
 
-/// Removes entries from a macOS wallpaper manifest file that reference Astra
-/// wallpapers which no longer exist on disk.
+/// Removes stale Astra wallpapers from the macOS System Settings wallpaper gallery.
 ///
-/// The manifest is a JSON document of undocumented shape. Rather than assume a
-/// schema, this walks the JSON and drops any entry object (an element of an array,
-/// or a value in an object) that directly references a file under `wallpapers_dir`
-/// which no longer exists. Entries referencing files that still exist — including
-/// the currently-set wallpaper — and entries for other apps are always kept, and
-/// unrecognized shapes are left untouched.
+/// macOS records every image set as a wallpaper in a view-model cache that backs
+/// System Settings → Wallpaper → "Your Photos" (`viewModel.groups[].items[]`).
+/// Items are never dropped when the underlying file disappears, so the gallery
+/// accumulates an entry for every render. This removes only items whose `id.id`
+/// is a file under `wallpapers_dir` that no longer exists; the currently-set
+/// wallpaper, system pictures, other apps' images, and the synthetic "Add Photo"
+/// / shuffle entries are always kept.
 ///
-/// The manifest is only rewritten when at least one entry was removed, and the
-/// rewrite is atomic (temporary file + rename) so a failure cannot corrupt it.
+/// Each removed item's thumbnail PNG is deleted only if it lives under
+/// `thumbnails_dir`, so a malformed cache can never delete files elsewhere.
 ///
-/// Returns the number of entries removed. This never fails the caller: a missing
-/// file, unparsable JSON, or I/O error is reported via verbose logging and yields
-/// 0, because the manifest format is undocumented and must never break a clean.
+/// The cache is only rewritten when at least one item was removed, and the rewrite
+/// is atomic (temporary file + rename) so a failure cannot corrupt it. Returns the
+/// number of items removed. This never fails the caller: a missing file, parse
+/// error, or I/O error is reported via verbose logging and yields 0, because the
+/// cache format is undocumented and must never break a clean.
 // Only called from the macOS implementation; on other targets this entry point
 // (and the helpers below, reachable only from it) is intentionally unused.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub fn prune_wallpaper_manifest_file(
+pub fn prune_wallpaper_gallery_file(
     config: &Config,
-    manifest_path: &Path,
+    gallery_path: &Path,
     wallpapers_dir: &Path,
+    thumbnails_dir: Option<&Path>,
 ) -> usize {
-    let manifest_contents = match read_to_string(manifest_path) {
-        Ok(contents) => contents,
-        Err(e) => {
-            config.print_if_verbose(
-                format!("WARN: could not read wallpaper manifest, skipping manifest cleanup: {e}")
-                    .as_str(),
-            );
-            return 0;
-        }
-    };
-    let mut manifest: Value = match serde_json::from_str(&manifest_contents) {
-        Ok(manifest) => manifest,
-        Err(e) => {
-            config.print_if_verbose(
-                format!("WARN: could not parse wallpaper manifest, skipping manifest cleanup: {e}")
-                    .as_str(),
-            );
-            return 0;
-        }
-    };
-
-    let removed = prune_stale_manifest_entries(&mut manifest, wallpapers_dir);
-    if removed == 0 {
-        return 0;
-    }
-
-    let serialized = match serde_json::to_string_pretty(&manifest) {
-        Ok(serialized) => serialized,
+    let mut gallery = match Value::from_file(gallery_path) {
+        Ok(gallery) => gallery,
         Err(e) => {
             config.print_if_verbose(
                 format!(
-                    "WARN: could not serialize pruned wallpaper manifest, leaving it unchanged: {e}"
+                    "WARN: could not read macOS wallpaper gallery, skipping gallery cleanup: {e}"
                 )
                 .as_str(),
             );
             return 0;
         }
     };
-    let temp_path = manifest_path.with_extension("json.tmp");
-    if let Err(e) = write(&temp_path, serialized).and_then(|()| rename(&temp_path, manifest_path)) {
-        let _ = remove_file(&temp_path);
-        config.print_if_verbose(
-            format!("WARN: could not update wallpaper manifest, leaving it unchanged: {e}")
-                .as_str(),
-        );
+
+    let mut stale_thumbnails = Vec::new();
+    let removed = prune_stale_gallery_items(
+        &mut gallery,
+        wallpapers_dir,
+        thumbnails_dir,
+        &mut stale_thumbnails,
+    );
+    if removed == 0 {
         return 0;
     }
 
+    if !write_plist_atomic(config, gallery_path, &gallery, "macOS wallpaper gallery") {
+        return 0;
+    }
+    remove_thumbnails(&stale_thumbnails);
+
     config.print_if_verbose(
-        format!("Removed {removed} stale Astra entries from wallpaper manifest").as_str(),
+        format!("Removed {removed} stale Astra entries from the macOS wallpaper gallery").as_str(),
     );
     removed
 }
 
-/// Recursively drops entry objects that directly reference a file under
-/// `wallpapers_dir` which no longer exists. Returns the number removed.
+/// Removes stale Astra entries from the image wallpaper extension's history.
 ///
-/// Only objects that directly hold a stale Astra path as one of their values are
-/// dropped. This keeps the pruning conservative: containers holding a mix of stale
-/// and fresh entries (e.g. a category with an items array) have only their stale
-/// items removed, rather than dropping the whole container.
-// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+/// The extension persists every image it has been asked to show in
+/// `ChoiceRequests.ImageFiles` inside its preferences plist, as an array of binary
+/// plist blobs holding an `originalURL` and a `copyURL` (thumbnail). WallpaperAgent
+/// rebuilds the System Settings gallery from that history, so pruning only the
+/// view-model cache is undone the next time a wallpaper is set. This drops history
+/// entries whose `originalURL` is a file under `wallpapers_dir` that no longer
+/// exists, plus their thumbnail copies.
+///
+/// Kept entries are preserved byte-for-byte (their blobs are not re-serialized), so
+/// bookmark data and timestamps survive untouched. The file is only rewritten when
+/// something was removed. Returns the number removed. This never fails the caller:
+/// a missing file, parse error, or I/O error is reported via verbose logging and
+/// yields 0.
+// Only called from the macOS implementation; on other targets this entry point
+// (and the helpers below, reachable only from it) is intentionally unused.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn prune_stale_manifest_entries(value: &mut Value, wallpapers_dir: &Path) -> usize {
-    match value {
-        Value::Array(items) => {
-            let mut removed = 0;
-            items.retain_mut(|item| {
-                if is_stale_astra_entry(item, wallpapers_dir) {
-                    removed += 1;
-                    false
-                } else {
-                    removed += prune_stale_manifest_entries(item, wallpapers_dir);
-                    true
-                }
-            });
-            removed
+pub fn prune_wallpaper_extension_image_files(
+    config: &Config,
+    prefs_path: &Path,
+    wallpapers_dir: &Path,
+    thumbnails_dir: Option<&Path>,
+) -> usize {
+    let mut prefs = match Value::from_file(prefs_path) {
+        Ok(prefs) => prefs,
+        Err(e) => {
+            config.print_if_verbose(
+                format!(
+                    "WARN: could not read macOS wallpaper gallery history, skipping gallery cleanup: {e}"
+                )
+                .as_str(),
+            );
+            return 0;
         }
-        Value::Object(map) => {
-            let mut removed = 0;
-            map.retain(|_, entry| {
-                if is_stale_astra_entry(entry, wallpapers_dir) {
-                    removed += 1;
-                    false
-                } else {
-                    removed += prune_stale_manifest_entries(entry, wallpapers_dir);
-                    true
-                }
-            });
-            removed
+    };
+    let Some(image_files) = prefs
+        .as_dictionary_mut()
+        .and_then(|prefs| prefs.get_mut("ChoiceRequests.ImageFiles"))
+        .and_then(Value::as_array_mut)
+    else {
+        return 0;
+    };
+
+    let mut kept = Vec::with_capacity(image_files.len());
+    let mut stale_thumbnails = Vec::new();
+    let mut removed = 0;
+    for entry in image_files.iter() {
+        let Some(entry_plist) = stale_history_entry(entry, wallpapers_dir) else {
+            kept.push(entry.clone());
+            continue;
+        };
+        if let Some(copy_url) = image_file_url(&entry_plist, "copyURL") {
+            let copy_path = normalize_file_url_path(&copy_url);
+            if let Some(thumbnails_dir) = thumbnails_dir
+                && copy_path.starts_with(thumbnails_dir)
+            {
+                stale_thumbnails.push(copy_path);
+            }
         }
-        _ => 0,
+        removed += 1;
+    }
+    if removed == 0 {
+        return 0;
+    }
+
+    *image_files = kept;
+    if !write_plist_atomic(
+        config,
+        prefs_path,
+        &prefs,
+        "macOS wallpaper gallery history",
+    ) {
+        return 0;
+    }
+    remove_thumbnails(&stale_thumbnails);
+
+    config.print_if_verbose(
+        format!("Removed {removed} stale Astra entries from the macOS wallpaper gallery history")
+            .as_str(),
+    );
+    removed
+}
+
+/// Reads a nested `{ "relative": "file://..." }` URL from a gallery history entry.
+// See the note on prune_wallpaper_extension_image_files: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn image_file_url(entry: &Value, key: &str) -> Option<String> {
+    Some(
+        entry
+            .as_dictionary()?
+            .get(key)?
+            .as_dictionary()?
+            .get("relative")?
+            .as_string()?
+            .to_string(),
+    )
+}
+
+/// Parses a `ChoiceRequests.ImageFiles` entry, returning it only if it points at a
+/// file under `wallpapers_dir` which no longer exists.
+// See the note on prune_wallpaper_extension_image_files: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn stale_history_entry(entry: &Value, wallpapers_dir: &Path) -> Option<Value> {
+    let Value::Data(entry_bytes) = entry else {
+        return None;
+    };
+    let entry_plist = Value::from_reader(std::io::Cursor::new(entry_bytes.as_slice())).ok()?;
+    let original_url = image_file_url(&entry_plist, "originalURL")?;
+    is_stale_astra_path(&original_url, wallpapers_dir).then_some(entry_plist)
+}
+
+/// Whether the macOS wallpaper gallery or its history references an Astra wallpaper
+/// that no longer exists.
+///
+/// The macOS implementation uses this to avoid stopping the wallpaper services when
+/// there is nothing to prune.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn wallpaper_gallery_has_stale_entries(
+    gallery_path: Option<&Path>,
+    history_path: Option<&Path>,
+    wallpapers_dir: &Path,
+) -> bool {
+    let gallery_is_stale = gallery_path
+        .and_then(|path| Value::from_file(path).ok())
+        .is_some_and(|mut gallery| {
+            prune_stale_gallery_items(&mut gallery, wallpapers_dir, None, &mut Vec::new()) > 0
+        });
+    let history_is_stale = history_path
+        .and_then(|path| Value::from_file(path).ok())
+        .is_some_and(|prefs| {
+            prefs
+                .as_dictionary()
+                .and_then(|prefs| prefs.get("ChoiceRequests.ImageFiles"))
+                .and_then(Value::as_array)
+                .is_some_and(|entries| {
+                    entries
+                        .iter()
+                        .any(|entry| stale_history_entry(entry, wallpapers_dir).is_some())
+                })
+        });
+    gallery_is_stale || history_is_stale
+}
+
+/// Serializes `value` as a binary plist and atomically replaces `path` with it.
+/// Preserves the original file permissions and leaves the file untouched on any
+/// failure. Returns whether the file was replaced.
+// See the note on prune_wallpaper_extension_image_files: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn write_plist_atomic(config: &Config, path: &Path, value: &Value, description: &str) -> bool {
+    let mut serialized = Vec::new();
+    if let Err(e) = value.to_writer_binary(&mut serialized) {
+        config.print_if_verbose(
+            format!("WARN: could not serialize pruned {description}, leaving it unchanged: {e}")
+                .as_str(),
+        );
+        return false;
+    }
+
+    let temp_path = path.with_file_name(format!(
+        "{}.astra-tmp",
+        path.file_name().unwrap_or_default().to_string_lossy()
+    ));
+    if let Err(e) = fs::write(&temp_path, &serialized) {
+        config.print_if_verbose(
+            format!("WARN: could not update {description}, leaving it unchanged: {e}").as_str(),
+        );
+        return false;
+    }
+    // Match the original permissions; the temp file is created with the default
+    // umask, which would otherwise change the file's access mode.
+    if let Ok(metadata) = fs::metadata(path) {
+        let _ = fs::set_permissions(&temp_path, metadata.permissions());
+    }
+    if let Err(e) = rename(&temp_path, path) {
+        let _ = remove_file(&temp_path);
+        config.print_if_verbose(
+            format!("WARN: could not update {description}, leaving it unchanged: {e}").as_str(),
+        );
+        return false;
+    }
+    true
+}
+
+// See the note on prune_wallpaper_extension_image_files: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn remove_thumbnails(thumbnails: &[PathBuf]) {
+    for thumbnail in thumbnails {
+        let _ = remove_file(thumbnail);
     }
 }
 
-/// Whether `value` is an object that directly references, as one of its values, a
-/// file under `wallpapers_dir` which no longer exists.
-// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+/// Drops gallery items that point at a deleted Astra wallpaper. Returns the number
+/// removed and collects the thumbnails that belonged to those items.
+// See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn is_stale_astra_entry(value: &Value, wallpapers_dir: &Path) -> bool {
-    match value {
-        Value::Object(map) => map.values().any(|entry_value| match entry_value {
-            Value::String(path_str) => is_stale_astra_path(path_str, wallpapers_dir),
-            _ => false,
-        }),
-        _ => false,
+fn prune_stale_gallery_items(
+    gallery: &mut Value,
+    wallpapers_dir: &Path,
+    thumbnails_dir: Option<&Path>,
+    stale_thumbnails: &mut Vec<PathBuf>,
+) -> usize {
+    let Some(groups) = gallery
+        .as_dictionary_mut()
+        .and_then(|view_model| view_model.get_mut("viewModel"))
+        .and_then(Value::as_dictionary_mut)
+        .and_then(|view_model| view_model.get_mut("groups"))
+        .and_then(Value::as_array_mut)
+    else {
+        return 0;
+    };
+
+    let mut removed = 0;
+    for group in groups {
+        let Some(items) = group
+            .as_dictionary_mut()
+            .and_then(|group| group.get_mut("items"))
+            .and_then(Value::as_array_mut)
+        else {
+            continue;
+        };
+        items.retain(|item| {
+            let Some(path_str) = gallery_item_path(item) else {
+                return true;
+            };
+            if !is_stale_astra_path(path_str, wallpapers_dir) {
+                return true;
+            }
+            if let Some(thumbnail) = gallery_item_thumbnail_path(item)
+                && let Some(thumbnails_dir) = thumbnails_dir
+                && thumbnail.starts_with(thumbnails_dir)
+            {
+                stale_thumbnails.push(thumbnail);
+            }
+            removed += 1;
+            false
+        });
     }
+    removed
+}
+
+/// The absolute wallpaper path stored in a gallery item (`id.id`).
+// See the note on prune_wallpaper_gallery_file: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn gallery_item_path(item: &Value) -> Option<&str> {
+    item.as_dictionary()?
+        .get("id")?
+        .as_dictionary()?
+        .get("id")?
+        .as_string()
+}
+
+/// The cached thumbnail path referenced by a gallery item, if any.
+// See the note on prune_wallpaper_gallery_file: macOS-only entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn gallery_item_thumbnail_path(item: &Value) -> Option<PathBuf> {
+    let relative = item
+        .as_dictionary()?
+        .get("thumbnail")?
+        .as_dictionary()?
+        .get("image")?
+        .as_dictionary()?
+        .get("url")?
+        .as_dictionary()?
+        .get("relative")?
+        .as_string()?;
+    Some(normalize_file_url_path(relative))
 }
 
 /// Whether `path_str` refers to a file under `wallpapers_dir` which no longer
-/// exists. Manifest paths may be plain paths or `file://` URLs (possibly
-/// percent-encoded), so both forms are normalized before comparing.
-// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+/// exists. Gallery paths are usually plain paths, but `file://` URLs and
+/// percent-encoded names are normalized too.
+// See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn is_stale_astra_path(path_str: &str, wallpapers_dir: &Path) -> bool {
-    let path = normalize_manifest_path(path_str);
+    let path = normalize_file_url_path(path_str);
     path.starts_with(wallpapers_dir) && !path.exists()
 }
 
-/// Normalizes a manifest path string into a filesystem path: strips a `file://`
-/// scheme (including a `localhost` host) and percent-decodes `%XX` sequences.
-// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+/// Normalizes a path string into a filesystem path: strips a `file://` scheme
+/// (including a `localhost` host) and percent-decodes `%XX` sequences.
+// See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn normalize_manifest_path(path_str: &str) -> PathBuf {
+fn normalize_file_url_path(path_str: &str) -> PathBuf {
     let without_scheme = path_str.strip_prefix("file://").unwrap_or(path_str);
     let decoded = percent_decode(without_scheme);
     let without_host = decoded
@@ -290,7 +488,7 @@ fn normalize_manifest_path(path_str: &str) -> PathBuf {
 
 /// Decodes `%XX` hex sequences in `input`, leaving anything else (including
 /// malformed sequences) untouched.
-// See the note on prune_wallpaper_manifest_file: macOS-only entry point.
+// See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn percent_decode(input: &str) -> String {
     let bytes = input.as_bytes();
@@ -601,166 +799,449 @@ mod tests {
         assert_eq!(color_map[255], [0, 255, 0]);
     }
 
-    fn manifest_test_wallpapers_dir() -> tempfile::TempDir {
+    fn gallery_test_dirs() -> (tempfile::TempDir, PathBuf, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(dir.path().join("Wallpapers")).unwrap();
-        dir
+        let wallpapers_dir = dir.path().join("Wallpapers");
+        let thumbnails_dir = dir.path().join("Thumbnails");
+        std::fs::create_dir_all(&wallpapers_dir).unwrap();
+        std::fs::create_dir_all(&thumbnails_dir).unwrap();
+        (dir, wallpapers_dir, thumbnails_dir)
     }
 
-    #[test]
-    fn test_prune_stale_manifest_entries_array_shape() {
-        let dir = manifest_test_wallpapers_dir();
-        let wallpapers_dir = dir.path().join("Wallpapers");
-        let kept = wallpapers_dir.join("solid_1700000000.png");
-        std::fs::write(&kept, b"").unwrap();
-        let stale = wallpapers_dir.join("julia_1600000000.png");
-        let other_app = "/somewhere/else/old.png".to_string();
-
-        let mut manifest = serde_json::json!([
-            { "path": stale.to_string_lossy() },
-            { "path": kept.to_string_lossy() },
-            { "path": other_app },
-        ]);
-        let removed = prune_stale_manifest_entries(&mut manifest, &wallpapers_dir);
-        assert_eq!(removed, 1);
-        let items = manifest.as_array().unwrap();
-        assert_eq!(items.len(), 2);
-        assert_eq!(items[0]["path"].as_str().unwrap(), kept.to_str().unwrap());
-        assert_eq!(items[1]["path"].as_str().unwrap(), other_app);
-    }
-
-    #[test]
-    fn test_prune_stale_manifest_entries_map_shape() {
-        let dir = manifest_test_wallpapers_dir();
-        let wallpapers_dir = dir.path().join("Wallpapers");
-        let stale = wallpapers_dir.join("julia_1600000000.png");
-        let kept = wallpapers_dir.join("solid_1700000000.png");
-        std::fs::write(&kept, b"").unwrap();
-
-        let mut manifest = serde_json::json!({
-            "id-stale": { "url": stale.to_string_lossy() },
-            "id-kept": { "url": kept.to_string_lossy() },
+    fn gallery_item(path: &Path, thumbnail: Option<&Path>) -> serde_json::Value {
+        let mut item = serde_json::json!({
+            "id": { "id": path.to_string_lossy() },
+            "localizedName": path.file_stem().unwrap_or_default().to_string_lossy(),
+            "disposability": { "removable": {} },
         });
-        let removed = prune_stale_manifest_entries(&mut manifest, &wallpapers_dir);
-        assert_eq!(removed, 1);
-        let map = manifest.as_object().unwrap();
-        assert!(!map.contains_key("id-stale"));
-        assert!(map.contains_key("id-kept"));
+        if let Some(thumbnail) = thumbnail {
+            item["thumbnail"] = serde_json::json!({
+                "image": {
+                    "url": {
+                        "relative": format!(
+                            "file://{}",
+                            thumbnail.to_string_lossy().replace(' ', "%20")
+                        )
+                    }
+                }
+            });
+        }
+        item
+    }
+
+    fn gallery_group(name: &str, items: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({
+            "id": { "id": name },
+            "localizedName": name,
+            "items": items,
+        })
+    }
+
+    fn gallery_document(groups: Vec<serde_json::Value>) -> serde_json::Value {
+        serde_json::json!({
+            "osBuildVersion": "test",
+            "viewModel": { "groups": groups, "isModificationDisabled": false },
+        })
+    }
+
+    fn write_gallery(path: &Path, document: serde_json::Value) {
+        let value: Value = serde_json::from_value(document).unwrap();
+        value.to_file_binary(path).unwrap();
+    }
+
+    fn gallery_history_entry(path: &Path, thumbnail: Option<&Path>) -> Value {
+        let mut entry = serde_json::json!({
+            "originalURL": {
+                "relative": format!("file://{}", path.to_string_lossy().replace(' ', "%20"))
+            },
+        });
+        if let Some(thumbnail) = thumbnail {
+            entry["copyURL"] = serde_json::json!({
+                "relative": format!(
+                    "file://{}",
+                    thumbnail.to_string_lossy().replace(' ', "%20")
+                )
+            });
+        }
+        let value: Value = serde_json::from_value(entry).unwrap();
+        let mut bytes = Vec::new();
+        value.to_writer_binary(&mut bytes).unwrap();
+        Value::Data(bytes)
+    }
+
+    fn write_gallery_history(path: &Path, entries: Vec<Value>) {
+        let mut prefs = plist::Dictionary::new();
+        prefs.insert(
+            "ChoiceRequests.ImageFiles".to_string(),
+            Value::Array(entries),
+        );
+        Value::Dictionary(prefs).to_file_binary(path).unwrap();
+    }
+
+    fn gallery_history_urls(path: &Path) -> Vec<String> {
+        Value::from_file(path)
+            .unwrap()
+            .as_dictionary()
+            .unwrap()
+            .get("ChoiceRequests.ImageFiles")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|entry| {
+                let Value::Data(bytes) = entry else {
+                    return None;
+                };
+                let parsed = Value::from_reader(std::io::Cursor::new(bytes.as_slice())).ok()?;
+                image_file_url(&parsed, "originalURL")
+            })
+            .collect()
+    }
+
+    fn gallery_item_paths(path: &Path) -> Vec<String> {
+        let gallery = Value::from_file(path).unwrap();
+        gallery
+            .as_dictionary()
+            .unwrap()
+            .get("viewModel")
+            .unwrap()
+            .as_dictionary()
+            .unwrap()
+            .get("groups")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|group| {
+                group
+                    .as_dictionary()
+                    .unwrap()
+                    .get("items")
+                    .unwrap()
+                    .as_array()
+                    .unwrap()
+            })
+            .filter_map(|item| gallery_item_path(item).map(str::to_string))
+            .collect()
     }
 
     #[test]
-    fn test_prune_stale_manifest_entries_nested_category_kept() {
-        let dir = manifest_test_wallpapers_dir();
-        let wallpapers_dir = dir.path().join("Wallpapers");
+    fn test_prune_wallpaper_gallery_removes_stale_astra_items_only() {
+        let (dir, wallpapers_dir, thumbnails_dir) = gallery_test_dirs();
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
         let stale = wallpapers_dir.join("julia_1600000000.png");
+
+        let kept_thumb = thumbnails_dir.join("kept Uuid.png");
+        let stale_thumb = thumbnails_dir.join("stale Uuid.png");
+        let other_thumb = dir.path().join("elsewhere.png");
+        std::fs::write(&kept_thumb, b"").unwrap();
+        std::fs::write(&stale_thumb, b"").unwrap();
+        std::fs::write(&other_thumb, b"").unwrap();
+
+        let gallery_path = dir.path().join("image-desktop");
+        write_gallery(
+            &gallery_path,
+            gallery_document(vec![gallery_group(
+                "YourPhotosGroup",
+                vec![
+                    gallery_item(&kept, Some(&kept_thumb)),
+                    gallery_item(&stale, Some(&stale_thumb)),
+                    // A stale item whose thumbnail is outside the cache directory
+                    // must not cause that file to be deleted.
+                    gallery_item(&wallpapers_dir.join("missing.png"), Some(&other_thumb)),
+                    // Non-Astra and synthetic items are always kept.
+                    gallery_item(
+                        Path::new("/System/Library/Desktop Pictures/Mac Purple.heic"),
+                        None,
+                    ),
+                    serde_json::json!({ "id": { "id": "add_photo" } }),
+                ],
+            )]),
+        );
+
+        let config = Config::new(false);
+        let removed = prune_wallpaper_gallery_file(
+            &config,
+            &gallery_path,
+            &wallpapers_dir,
+            Some(&thumbnails_dir),
+        );
+        assert_eq!(removed, 2);
+        assert!(!stale_thumb.exists());
+        assert!(kept_thumb.exists());
+        assert!(other_thumb.exists());
+
+        let paths = gallery_item_paths(&gallery_path);
+        assert_eq!(paths.len(), 3);
+        assert!(paths.contains(&kept.to_string_lossy().into_owned()));
+        assert!(paths.contains(&"/System/Library/Desktop Pictures/Mac Purple.heic".to_string()));
+        assert!(paths.contains(&"add_photo".to_string()));
+    }
+
+    #[test]
+    fn test_prune_wallpaper_gallery_removes_across_groups() {
+        let (dir, wallpapers_dir, thumbnails_dir) = gallery_test_dirs();
         let kept = wallpapers_dir.join("solid_1700000000.png");
         std::fs::write(&kept, b"").unwrap();
 
-        let mut manifest = serde_json::json!({
-            "categories": [
-                {
-                    "name": "Astra",
-                    "items": [
-                        { "path": stale.to_string_lossy() },
-                        { "path": kept.to_string_lossy() },
+        let gallery_path = dir.path().join("image-desktop");
+        write_gallery(
+            &gallery_path,
+            gallery_document(vec![
+                gallery_group(
+                    "YourPhotosGroup",
+                    vec![gallery_item(&wallpapers_dir.join("a_1.png"), None)],
+                ),
+                gallery_group(
+                    "AnotherGroup",
+                    vec![
+                        gallery_item(&wallpapers_dir.join("b_2.png"), None),
+                        gallery_item(&kept, None),
                     ],
-                },
-            ],
-        });
-        let removed = prune_stale_manifest_entries(&mut manifest, &wallpapers_dir);
-        assert_eq!(removed, 1);
-        let items = manifest["categories"][0]["items"].as_array().unwrap();
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0]["path"].as_str().unwrap(), kept.to_str().unwrap());
-    }
-
-    #[test]
-    fn test_prune_stale_manifest_entries_file_url_and_percent_encoding() {
-        let dir = manifest_test_wallpapers_dir();
-        let wallpapers_dir = dir.path().join("Wallpapers");
-        let kept = wallpapers_dir.join("my wall.png");
-        std::fs::write(&kept, b"").unwrap();
-        let stale_url = format!("file://{}/old%20wall.png", wallpapers_dir.to_string_lossy());
-        // Kept entry is percent-encoded too, so decoding is required to keep it.
-        let kept_url = format!("file://{}", kept.to_string_lossy().replace(' ', "%20"));
-
-        let mut manifest = serde_json::json!([
-            { "path": stale_url },
-            { "path": kept_url },
-        ]);
-        let removed = prune_stale_manifest_entries(&mut manifest, &wallpapers_dir);
-        assert_eq!(removed, 1);
-        let items = manifest.as_array().unwrap();
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0]["path"].as_str().unwrap(), kept_url);
-    }
-
-    #[test]
-    fn test_prune_wallpaper_manifest_file_end_to_end() {
-        let dir = manifest_test_wallpapers_dir();
-        let wallpapers_dir = dir.path().join("Wallpapers");
-        let kept = wallpapers_dir.join("solid_1700000000.png");
-        std::fs::write(&kept, b"").unwrap();
-        let stale = wallpapers_dir.join("julia_1600000000.png");
-
-        let manifest_path = dir.path().join("entries.json");
-        std::fs::write(
-            &manifest_path,
-            serde_json::json!([
-                { "path": stale.to_string_lossy() },
-                { "path": kept.to_string_lossy() },
-            ])
-            .to_string(),
-        )
-        .unwrap();
+                ),
+            ]),
+        );
 
         let config = Config::new(false);
-        let removed = prune_wallpaper_manifest_file(&config, &manifest_path, &wallpapers_dir);
-        assert_eq!(removed, 1);
-        let updated: Value =
-            serde_json::from_str(&std::fs::read_to_string(&manifest_path).unwrap()).unwrap();
-        let items = updated.as_array().unwrap();
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0]["path"].as_str().unwrap(), kept.to_str().unwrap());
-    }
-
-    #[test]
-    fn test_prune_wallpaper_manifest_file_leaves_clean_manifest_untouched() {
-        let dir = manifest_test_wallpapers_dir();
-        let wallpapers_dir = dir.path().join("Wallpapers");
-        let kept = wallpapers_dir.join("solid_1700000000.png");
-        std::fs::write(&kept, b"").unwrap();
-
-        let manifest_path = dir.path().join("entries.json");
-        let original = serde_json::json!([{ "path": kept.to_string_lossy() }]).to_string();
-        std::fs::write(&manifest_path, &original).unwrap();
-
-        let config = Config::new(false);
-        let removed = prune_wallpaper_manifest_file(&config, &manifest_path, &wallpapers_dir);
-        assert_eq!(removed, 0);
-        assert_eq!(std::fs::read_to_string(&manifest_path).unwrap(), original);
-    }
-
-    #[test]
-    fn test_prune_wallpaper_manifest_file_missing_and_invalid() {
-        let dir = manifest_test_wallpapers_dir();
-        let wallpapers_dir = dir.path().join("Wallpapers");
-        let config = Config::new(false);
-
-        let missing = dir.path().join("does-not-exist.json");
         assert_eq!(
-            prune_wallpaper_manifest_file(&config, &missing, &wallpapers_dir),
+            prune_wallpaper_gallery_file(
+                &config,
+                &gallery_path,
+                &wallpapers_dir,
+                Some(&thumbnails_dir)
+            ),
+            2
+        );
+        let paths = gallery_item_paths(&gallery_path);
+        assert_eq!(paths, vec![kept.to_string_lossy().into_owned()]);
+    }
+
+    #[test]
+    fn test_prune_wallpaper_gallery_leaves_clean_gallery_untouched() {
+        let (dir, wallpapers_dir, thumbnails_dir) = gallery_test_dirs();
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
+
+        let gallery_path = dir.path().join("image-desktop");
+        write_gallery(
+            &gallery_path,
+            gallery_document(vec![gallery_group(
+                "YourPhotosGroup",
+                vec![gallery_item(&kept, None)],
+            )]),
+        );
+        let original = std::fs::read(&gallery_path).unwrap();
+
+        let config = Config::new(false);
+        assert_eq!(
+            prune_wallpaper_gallery_file(
+                &config,
+                &gallery_path,
+                &wallpapers_dir,
+                Some(&thumbnails_dir)
+            ),
+            0
+        );
+        assert_eq!(std::fs::read(&gallery_path).unwrap(), original);
+    }
+
+    #[test]
+    fn test_prune_wallpaper_gallery_missing_and_invalid() {
+        let (dir, wallpapers_dir, thumbnails_dir) = gallery_test_dirs();
+        let config = Config::new(false);
+
+        let missing = dir.path().join("does-not-exist");
+        assert_eq!(
+            prune_wallpaper_gallery_file(&config, &missing, &wallpapers_dir, Some(&thumbnails_dir)),
             0
         );
         assert!(!missing.exists());
 
-        let invalid = dir.path().join("invalid.json");
-        std::fs::write(&invalid, b"{not json").unwrap();
+        let invalid = dir.path().join("invalid");
+        std::fs::write(&invalid, b"not a plist").unwrap();
         assert_eq!(
-            prune_wallpaper_manifest_file(&config, &invalid, &wallpapers_dir),
+            prune_wallpaper_gallery_file(&config, &invalid, &wallpapers_dir, Some(&thumbnails_dir)),
             0
         );
-        assert_eq!(std::fs::read_to_string(&invalid).unwrap(), "{not json");
+        assert_eq!(std::fs::read(&invalid).unwrap(), b"not a plist");
+    }
+
+    #[test]
+    fn test_normalize_file_url_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let with_space = dir.path().join("my wall.png");
+        let url = format!(
+            "file://{}",
+            with_space.to_string_lossy().replace(' ', "%20")
+        );
+        assert_eq!(normalize_file_url_path(&url), with_space);
+        assert_eq!(
+            normalize_file_url_path("file://localhost/tmp/x.png"),
+            PathBuf::from("/tmp/x.png")
+        );
+        assert_eq!(
+            normalize_file_url_path("/tmp/plain.png"),
+            PathBuf::from("/tmp/plain.png")
+        );
+        assert_eq!(percent_decode("100%25 and %zz"), "100% and %zz");
+    }
+
+    #[test]
+    fn test_wallpaper_gallery_has_stale_entries() {
+        let (dir, wallpapers_dir, _thumbnails_dir) = gallery_test_dirs();
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
+
+        let gallery_path = dir.path().join("image-desktop");
+        let history_path = dir.path().join("prefs.plist");
+        write_gallery(
+            &gallery_path,
+            gallery_document(vec![gallery_group(
+                "YourPhotosGroup",
+                vec![gallery_item(&kept, None)],
+            )]),
+        );
+        write_gallery_history(&history_path, vec![gallery_history_entry(&kept, None)]);
+        assert!(!wallpaper_gallery_has_stale_entries(
+            Some(&gallery_path),
+            Some(&history_path),
+            &wallpapers_dir
+        ));
+
+        // A missing or unreadable file must not be reported as stale: there is
+        // nothing to prune, so the wallpaper services should not be stopped.
+        assert!(!wallpaper_gallery_has_stale_entries(
+            Some(&dir.path().join("missing")),
+            Some(&dir.path().join("missing")),
+            &wallpapers_dir
+        ));
+
+        write_gallery(
+            &gallery_path,
+            gallery_document(vec![gallery_group(
+                "YourPhotosGroup",
+                vec![gallery_item(&wallpapers_dir.join("a.png"), None)],
+            )]),
+        );
+        assert!(wallpaper_gallery_has_stale_entries(
+            Some(&gallery_path),
+            None,
+            &wallpapers_dir
+        ));
+
+        write_gallery(
+            &gallery_path,
+            gallery_document(vec![gallery_group(
+                "YourPhotosGroup",
+                vec![gallery_item(&kept, None)],
+            )]),
+        );
+        write_gallery_history(
+            &history_path,
+            vec![gallery_history_entry(&wallpapers_dir.join("b.png"), None)],
+        );
+        assert!(wallpaper_gallery_has_stale_entries(
+            None,
+            Some(&history_path),
+            &wallpapers_dir
+        ));
+    }
+
+    #[test]
+    fn test_prune_wallpaper_extension_image_files_removes_stale_only() {
+        let (dir, wallpapers_dir, thumbnails_dir) = gallery_test_dirs();
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
+        let stale = wallpapers_dir.join("julia_1600000000.png");
+        let kept_thumb = thumbnails_dir.join("kept.png");
+        let stale_thumb = thumbnails_dir.join("stale.png");
+        let other_thumb = dir.path().join("elsewhere.png");
+        for file in [&kept_thumb, &stale_thumb, &other_thumb] {
+            std::fs::write(file, b"").unwrap();
+        }
+
+        let prefs_path = dir.path().join("prefs.plist");
+        write_gallery_history(
+            &prefs_path,
+            vec![
+                gallery_history_entry(&kept, Some(&kept_thumb)),
+                gallery_history_entry(&stale, Some(&stale_thumb)),
+                gallery_history_entry(&wallpapers_dir.join("missing.png"), Some(&other_thumb)),
+                gallery_history_entry(Path::new("/somewhere/else/old.png"), None),
+            ],
+        );
+
+        let config = Config::new(false);
+        let removed = prune_wallpaper_extension_image_files(
+            &config,
+            &prefs_path,
+            &wallpapers_dir,
+            Some(&thumbnails_dir),
+        );
+        assert_eq!(removed, 2);
+        assert!(!stale_thumb.exists());
+        assert!(kept_thumb.exists());
+        assert!(other_thumb.exists());
+
+        let urls = gallery_history_urls(&prefs_path);
+        assert_eq!(urls.len(), 2);
+        assert!(urls.iter().any(|url| url.ends_with("solid_1700000000.png")));
+        assert!(urls.iter().any(|url| url.ends_with("old.png")));
+    }
+
+    #[test]
+    fn test_prune_wallpaper_extension_image_files_leaves_clean_history_untouched() {
+        let (dir, wallpapers_dir, thumbnails_dir) = gallery_test_dirs();
+        let kept = wallpapers_dir.join("solid_1700000000.png");
+        std::fs::write(&kept, b"").unwrap();
+
+        let prefs_path = dir.path().join("prefs.plist");
+        write_gallery_history(&prefs_path, vec![gallery_history_entry(&kept, None)]);
+        let original = std::fs::read(&prefs_path).unwrap();
+
+        let config = Config::new(false);
+        assert_eq!(
+            prune_wallpaper_extension_image_files(
+                &config,
+                &prefs_path,
+                &wallpapers_dir,
+                Some(&thumbnails_dir)
+            ),
+            0
+        );
+        assert_eq!(std::fs::read(&prefs_path).unwrap(), original);
+    }
+
+    #[test]
+    fn test_prune_wallpaper_extension_image_files_missing_and_invalid() {
+        let (dir, wallpapers_dir, thumbnails_dir) = gallery_test_dirs();
+        let config = Config::new(false);
+
+        let missing = dir.path().join("missing-prefs");
+        assert_eq!(
+            prune_wallpaper_extension_image_files(
+                &config,
+                &missing,
+                &wallpapers_dir,
+                Some(&thumbnails_dir)
+            ),
+            0
+        );
+        assert!(!missing.exists());
+
+        let invalid = dir.path().join("invalid-prefs");
+        std::fs::write(&invalid, b"not a plist").unwrap();
+        assert_eq!(
+            prune_wallpaper_extension_image_files(
+                &config,
+                &invalid,
+                &wallpapers_dir,
+                Some(&thumbnails_dir)
+            ),
+            0
+        );
+        assert_eq!(std::fs::read(&invalid).unwrap(), b"not a plist");
     }
 }
 // --- Tests ---
