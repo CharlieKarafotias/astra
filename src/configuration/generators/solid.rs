@@ -1,12 +1,18 @@
 use crate::wallpaper_generators::Color;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter, Write};
 
-#[derive(Debug, Default, Deserialize, PartialEq)]
+/// Options for the solid-color generator.
+#[derive(Debug, Default, Deserialize, JsonSchema, PartialEq)]
 pub struct SolidConfig {
+    /// Named colors to pick from. One is picked at random.
     preferred_default_colors: Option<Vec<Color>>,
+    /// RGB colors as `[r, g, b]` triples. One is picked at random.
     preferred_rgb_colors: Option<Vec<(u8, u8, u8)>>,
     // If true, ignore above fields
+    /// Use the color themes from the top-level `themes` setting instead of the
+    /// color lists above.
     respect_color_themes: Option<bool>,
 }
 

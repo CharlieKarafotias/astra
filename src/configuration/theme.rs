@@ -1,12 +1,17 @@
 use super::super::themes::{ColorTheme, ThemeSelector};
 use rand::seq::IndexedRandom;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter, Write};
 
-#[derive(Debug, Deserialize, PartialEq)]
+/// A named set of colors generators can use.
+#[derive(Debug, Deserialize, JsonSchema, PartialEq)]
 pub struct ThemeConfig {
+    /// Display name for the theme.
     name: String,
+    /// RGB colors as `[r, g, b]` triples for light mode or general use.
     colors: Vec<(u8, u8, u8)>,
+    /// RGB colors as `[r, g, b]` triples to use when dark mode is active.
     dark_mode_colors: Option<Vec<(u8, u8, u8)>>,
 }
 
@@ -58,7 +63,8 @@ impl Display for ThemeConfig {
     }
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+/// The list of custom color themes.
+#[derive(Debug, Deserialize, JsonSchema, PartialEq)]
 pub struct ThemeConfigs(Vec<ThemeConfig>);
 
 impl ThemeConfigs {

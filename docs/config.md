@@ -21,6 +21,33 @@ All configuration files must be written in **JSON**.
 }
 ```
 
+### Editor Autocomplete and Validation
+
+Astra ships a JSON Schema for this file, so editors can autocomplete keys and
+flag invalid values. To print it:
+
+```sh
+astra config --schema
+```
+
+Running `astra config` also writes `config.schema.json` next to your
+`config.json`, which lets completion work offline. New configuration files
+include the matching reference automatically:
+
+```json
+{
+  "$schema": "./config.schema.json"
+}
+```
+
+Existing config files are left untouched — add the `$schema` line yourself to
+opt in. If your editor cannot resolve relative paths, point `$schema` at the
+committed copy instead:
+
+```text
+https://raw.githubusercontent.com/CharlieKarafotias/astra/main/docs/config.schema.json
+```
+
 ---
 
 ## Configuration File Locations

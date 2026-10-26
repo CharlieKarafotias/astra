@@ -1,5 +1,7 @@
 use super::super::cli::{Generator, SolidMode};
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::Deserialize;
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
 pub(crate) mod julia;
@@ -60,6 +62,25 @@ impl Display for Generators {
                 .collect::<Vec<String>>()
                 .join(", ")
         )
+    }
+}
+
+impl JsonSchema for Generators {
+    fn schema_name() -> Cow<'static, str> {
+        "Generators".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        let allowed: Vec<&str> = Self::ALL_GENERATORS.iter().map(Generator::prefix).collect();
+        json_schema!({
+            "type": "array",
+            "description": "Generators Astra may choose from. One is picked at random on each run.",
+            "items": {
+                "type": "string",
+                "enum": allowed
+            },
+            "examples": [["spotlight", "solid"]]
+        })
     }
 }
 
