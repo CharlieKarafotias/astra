@@ -12,12 +12,13 @@ chrono = { version = "0.4.45", features = ["clock"] }
 clap = { version = "4.6.7", features = ["derive"] }
 clap_complete = "4.6.11"
 directories = "6.0.0"
-# Only PNG (what `save` writes) and JPEG/PNG (what the remote generators decode) are
-# used. Disabling the default features keeps the unused decoders (AVIF/EXR/GIF/TIFF/
-# WebP/...) out of the build. `image`'s own `rayon` feature is not used either (astra
-# depends on `rayon` directly for the julia generator), and it is what pulls in
-# EXR/AVIF, which in turn depend on the unmaintained `paste` crate.
-image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+# Only the formats astra actually uses: PNG (what `save` writes), JPEG/PNG (what the
+# remote generators decode) and GIF (the early NASA APOD archive). Disabling the
+# default features keeps the unused decoders (AVIF/EXR/TIFF/WebP/...) out of the
+# build. `image`'s own `rayon` feature is not used either (astra depends on `rayon`
+# directly for the julia generator), and it is what pulls in EXR/AVIF, which in turn
+# depend on the unmaintained `paste` crate.
+image = { version = "0.25.10", default-features = false, features = ["gif", "jpeg", "png"] }
 num-complex = { version = "0.4.6", features = ["std"] }
 plist = "1.10.3"
 rand = "0.10.3"
