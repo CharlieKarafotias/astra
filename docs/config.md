@@ -30,9 +30,8 @@ flag invalid values. To print it:
 astra config --schema
 ```
 
-Running `astra config` also writes `config.schema.json` next to your
-`config.json`, which lets completion work offline. New configuration files
-include the matching reference automatically:
+Running `astra config` writes `config.schema.json` next to your `config.json`
+and points the config at it, so completion also works offline:
 
 ```json
 {
@@ -40,8 +39,12 @@ include the matching reference automatically:
 }
 ```
 
-Existing config files are left untouched — add the `$schema` line yourself to
-opt in. If your editor cannot resolve relative paths, point `$schema` at the
+> [!TIP]
+> Already have a `config.json`? Run `astra config` once. It adds only the
+> `$schema` line and leaves the rest of the file — including its formatting —
+> alone. Astra ignores the key at runtime.
+
+If your editor cannot resolve relative paths, point `$schema` at the
 committed copy instead:
 
 ```text

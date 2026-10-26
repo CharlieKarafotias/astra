@@ -141,8 +141,9 @@ _Astra uses the [`directories`](https://lib.rs/crates/directories) crate for thi
 #### Supported Configuration Keys
 
 Check out [docs/config.md](./docs/config.md) file for all supported keys. Run
-`astra config` to install the JSON Schema that enables editor autocomplete and
-validation, or `astra config --schema` to print it.
+`astra config` to install the JSON Schema and add its `$schema` reference to
+your config, enabling editor autocomplete and validation. Use
+`astra config --schema` to print the schema instead.
 
 ## 🤝 Contributing
 
