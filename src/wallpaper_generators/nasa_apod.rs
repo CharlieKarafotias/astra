@@ -3,13 +3,43 @@ use super::utils::{AstraImage, WallpaperGeneratorError, download_image_to_memory
 use chrono::{Local, NaiveDate};
 use serde::Deserialize;
 
-/// Generates a wallpaper from the NASA Astronomy Picutre of the Day website. The website
-/// provides a photo of the day, which is used as the wallpaper.
-/// The image download URL is derived by:
-///   - Going to https://apod.nasa.gov/apod/ap{date in format yymmdd}.html (April 23, 2026 -> 260423)
-///   - HTML inspected for an <img> tag with `src`
-///   - Navigate to `src` which is format like `https://apod.nasa.gov/apod/image/2604/noirlab2610c_1024.jpg`
-///   - Downloaded image from the URL
+/// Today's picture of the day. This page also links to the calendar and archive.
+const APOD_TODAY_URL: &str = "https://science.nasa.gov/apod/";
+
+/// Returns a month of APOD entries as calendar HTML. Each day is a
+/// `data-date="YYYY-MM-DD"` cell containing the article link.
+const APOD_CALENDAR_URL: &str = "https://science.nasa.gov/wp-json/smd/v1/content-list/";
+
+/// WordPress category id for APOD image articles.
+const APOD_CATEGORY_ID: &str = "22766";
+
+/// Category filter required by the content-list endpoint to return APOD entries
+/// only (the same value the APOD calendar block sends).
+const APOD_CALENDAR_BASE_TERMS: &str =
+    r#"{"category":"22766","science-org":"","internal-terms":"","news-tags":""}"#;
+
+/// Renders a random APOD article (the request the random-apod page makes).
+const APOD_RANDOM_URL: &str = "https://science.nasa.gov/wp-json/smd/v1/embed-post";
+
+/// Marker for APOD's own image assets on `science.nasa.gov`.
+const APOD_ASSET_MARKER: &str = "/cds/apod/apod/";
+
+/// How many random articles to request before giving up. Video entries have no
+/// still picture, so a retry usually finds an image.
+const APOD_RANDOM_ATTEMPTS: usize = 5;
+
+/// Generates a wallpaper from the NASA Astronomy Picture of the Day website.
+///
+/// The picture is resolved from the new `science.nasa.gov` site:
+///   - Today's picture from <https://science.nasa.gov/apod/>;
+///   - Any other date through the APOD calendar API
+///     (`wp-json/smd/v1/content-list/`), which maps the date to its image
+///     article, whose page links the original asset;
+///   - A random picture through the `random-apod` embed endpoint.
+///
+/// The page's `<a href>` to the full-resolution asset is used first, then the
+/// rendered `<img src>` (mapped back to the original `content/dam` file).
+/// Video entries have no still picture of the day and return a clear error.
 ///
 /// The image is saved to astra wallpaper folder with name of the form
 /// `nasa_apod_<unix_timestamp>.png` (if save and update are true).
@@ -26,10 +56,32 @@ use serde::Deserialize;
 pub fn generate_nasa_apod(
     config: &Config,
     date: &Option<ApodDate>,
+    random: bool,
 ) -> Result<AstraImage, WallpaperGeneratorError> {
     config.print_if_verbose("Generating NASA Astronomy Picture of the Day...");
 
-    let img_date: &ApodDate = if config.respect_user_config {
+    let html = if random && !config.respect_user_config {
+        config.print_if_verbose("Using a random Astronomy Picture of the Day...");
+        download_random_apod_html()?
+    } else {
+        let img_date = resolve_apod_date(config, date)?;
+        download_apod_page(config, &img_date)?
+    };
+
+    let img_download_link = retrieve_image_download_url(&html)?;
+    let downloaded_img = download_image_to_memory(config, &img_download_link)?;
+    Ok(image::load_from_memory(downloaded_img.as_slice())
+        .map_err(|e| WallpaperGeneratorError::ImageGeneration(e.to_string()))?
+        .to_rgb8())
+}
+
+/// Picks the date to use: the configured random range, the date passed on the
+/// command line, or today.
+fn resolve_apod_date(
+    config: &Config,
+    date: &Option<ApodDate>,
+) -> Result<ApodDate, WallpaperGeneratorError> {
+    if config.respect_user_config {
         config.print_if_verbose("User config detected with nasa_apod_gen options...");
         let date_from = crate::respect_user_config_or_default!(
             config,
@@ -45,50 +97,200 @@ pub fn generate_nasa_apod(
         )?;
 
         match (date_from.is_empty(), date_to.is_empty()) {
-            (true, true) => &ApodDate::today().map_err(|e| {
+            (true, true) => ApodDate::today().map_err(|e| {
                 WallpaperGeneratorError::ImageGeneration(format!(
                     "Failed to derive today's date as APOD Date: {e}"
                 ))
-            })?,
-            (false, true) => &ApodDate::random_between(Some(&date_from), None).map_err(|e| {
+            }),
+            (false, true) => ApodDate::random_between(Some(&date_from), None).map_err(|e| {
                 WallpaperGeneratorError::ImageGeneration(format!(
                     "Failed to derive random date between {date_from} and today: {e}"
                 ))
-            })?,
-            (true, false) => &ApodDate::random_between(None, Some(&date_to)).map_err(|e| {
+            }),
+            (true, false) => ApodDate::random_between(None, Some(&date_to)).map_err(|e| {
                 WallpaperGeneratorError::ImageGeneration(format!(
                     "Failed to derive random date between earlest NASA apod date and {date_to}: {e}"
                 ))
-            })?,
+            }),
             (false, false) => {
-                &ApodDate::random_between(Some(&date_from), Some(&date_to)).map_err(|e| {
+                ApodDate::random_between(Some(&date_from), Some(&date_to)).map_err(|e| {
                     WallpaperGeneratorError::ImageGeneration(format!(
                         "Failed to derive random date between {date_from} and {date_to}: {e}"
                     ))
-                })?
+                })
             }
         }
     } else if let Some(d) = date {
         config.print_if_verbose(format!("Using received date from args - {d}").as_str());
-        d
+        Ok(d.clone())
     } else {
         config.print_if_verbose("Using today's date");
-        &ApodDate::today().map_err(|e| {
+        ApodDate::today().map_err(|e| {
             WallpaperGeneratorError::ImageGeneration(format!(
                 "Failed to derive today's date as APOD Date: {e}"
             ))
-        })?
-    };
+        })
+    }
+}
 
-    let base = "https://apod.nasa.gov/apod";
-    let url = format!("{base}/ap{}.html", img_date);
+/// Fetches the HTML page that contains the requested day's picture.
+///
+/// Today's picture is on the APOD landing page. Other dates are looked up in
+/// the calendar API first, because the new article URLs contain a title slug
+/// and cannot be built from the date alone.
+fn download_apod_page(config: &Config, date: &ApodDate) -> Result<String, WallpaperGeneratorError> {
+    let today = ApodDate::today().map_err(|e| {
+        WallpaperGeneratorError::ImageGeneration(format!(
+            "Failed to derive today's date as APOD Date: {e}"
+        ))
+    })?;
 
-    let html = download_page_html(&url)?;
-    let img_download_link = format!("{base}/{}", retrieve_image_download_url(html)?);
-    let downloaded_img = download_image_to_memory(config, &img_download_link)?;
-    Ok(image::load_from_memory(downloaded_img.as_slice())
-        .map_err(|e| WallpaperGeneratorError::ImageGeneration(e.to_string()))?
-        .to_rgb8())
+    if date == &today {
+        config.print_if_verbose(format!("Fetching today's APOD from {APOD_TODAY_URL}").as_str());
+        return download_page_html(APOD_TODAY_URL);
+    }
+
+    let article_url = find_apod_article_url(config, date)?;
+    config.print_if_verbose(format!("Fetching APOD article {article_url}").as_str());
+    download_page_html(&article_url)
+}
+
+/// Looks up the image article for a date in the APOD calendar API.
+fn find_apod_article_url(
+    config: &Config,
+    date: &ApodDate,
+) -> Result<String, WallpaperGeneratorError> {
+    let naive = date.to_date().map_err(|e| {
+        WallpaperGeneratorError::ImageGeneration(format!("Invalid APOD date {date}: {e}"))
+    })?;
+    let year = naive.format("%Y").to_string();
+    let month = naive.format("%m").to_string();
+    let day = naive.format("%Y-%m-%d").to_string();
+
+    let mut url = reqwest::Url::parse(APOD_CALENDAR_URL)
+        .map_err(|e| WallpaperGeneratorError::Parse(e.to_string()))?;
+    url.query_pairs_mut()
+        .append_pair("post_types", "image-article")
+        .append_pair("layout", "calendar")
+        .append_pair("response_format", "html")
+        .append_pair("order", "DESC")
+        .append_pair("orderby", "date")
+        .append_pair("number_of_items", "2000")
+        .append_pair("current_page", "1")
+        .append_pair("calendar_year", &year)
+        .append_pair("calendar_month", &month)
+        .append_pair("base_terms", APOD_CALENDAR_BASE_TERMS);
+
+    let response = reqwest::blocking::Client::new()
+        .get(url)
+        .send()
+        .map_err(|e| WallpaperGeneratorError::Network(e.to_string()))?;
+
+    let status = response.status();
+    let body = response
+        .text()
+        .map_err(|e| WallpaperGeneratorError::Parse(e.to_string()))?;
+    if !status.is_success() {
+        return Err(WallpaperGeneratorError::Network(format!(
+            "APOD calendar request failed with status {status}"
+        )));
+    }
+
+    config
+        .print_if_verbose(format!("Looking up {day} in the {year}-{month} APOD calendar").as_str());
+
+    let calendar: ApodCalendarResponse = serde_json::from_str(&body).map_err(|e| {
+        WallpaperGeneratorError::Parse(format!("Failed to parse the APOD calendar response: {e}"))
+    })?;
+
+    find_calendar_entry(&calendar.content, &day).ok_or_else(|| {
+        WallpaperGeneratorError::ImageGeneration(format!(
+            "NASA has no Astronomy Picture of the Day for {day} - try a different day or another generator"
+        ))
+    })
+}
+
+/// Finds the image article link for `day` in the calendar HTML returned by the
+/// content-list endpoint.
+fn find_calendar_entry(calendar_html: &str, day: &str) -> Option<String> {
+    let marker = format!("data-date=\"{day}\"");
+    let cell_start = calendar_html.find(&marker)? + marker.len();
+    let cell_end = calendar_html[cell_start..]
+        .find("data-date=\"")
+        .map_or(calendar_html.len(), |offset| cell_start + offset);
+    let cell = &calendar_html[cell_start..cell_end];
+
+    let mut rest = cell;
+    while let Some(index) = rest.find("href=\"") {
+        let after = &rest[index + "href=\"".len()..];
+        let end = after.find('"')?;
+        let url = &after[..end];
+        if url.contains("/image-article/") {
+            return Some(url.to_string());
+        }
+        rest = after;
+    }
+    None
+}
+
+/// Downloads a random APOD article, retrying when the chosen entry is a video
+/// (which has no still picture to extract).
+fn download_random_apod_html() -> Result<String, WallpaperGeneratorError> {
+    let mut last_error = None;
+    for _ in 0..APOD_RANDOM_ATTEMPTS {
+        let html = request_random_apod_html()?;
+        match retrieve_image_download_url(&html) {
+            Ok(_) => return Ok(html),
+            Err(error) => last_error = Some(error),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        WallpaperGeneratorError::ImageGeneration(
+            "Could not find a random Astronomy Picture of the Day with an image - try again or use another generator"
+                .to_string(),
+        )
+    }))
+}
+
+/// Requests the same embed the `random-apod` page uses.
+fn request_random_apod_html() -> Result<String, WallpaperGeneratorError> {
+    let body = serde_json::json!({
+        "attributes": {
+            "selectedPostTypes": ["image-article"],
+            "selectedCategory": APOD_CATEGORY_ID,
+            "displayFeaturedImageAndTitleOnly": false,
+            "randomizePost": true,
+        },
+        "currentPostId": 0,
+    });
+
+    let response = reqwest::blocking::Client::new()
+        .post(APOD_RANDOM_URL)
+        .json(&body)
+        .send()
+        .map_err(|e| WallpaperGeneratorError::Network(e.to_string()))?;
+
+    let status = response.status();
+    let body = response
+        .text()
+        .map_err(|e| WallpaperGeneratorError::Parse(e.to_string()))?;
+    if !status.is_success() {
+        return Err(WallpaperGeneratorError::Network(format!(
+            "Random APOD request failed with status {status}"
+        )));
+    }
+
+    let random: ApodRandomResponse = serde_json::from_str(&body).map_err(|e| {
+        WallpaperGeneratorError::Parse(format!("Failed to parse the random APOD response: {e}"))
+    })?;
+
+    if random.html.is_empty() {
+        return Err(WallpaperGeneratorError::Parse(
+            "The random APOD response was empty".to_string(),
+        ));
+    }
+    Ok(random.html)
 }
 
 /// Helper to download the html content of a webpage
@@ -107,23 +309,84 @@ fn download_page_html(url: &str) -> Result<String, WallpaperGeneratorError> {
         .map_err(|e| WallpaperGeneratorError::Parse(e.to_string()))
 }
 
-fn retrieve_image_download_url(webpage_html: String) -> Result<String, WallpaperGeneratorError> {
-    let pos_of_image_src = webpage_html
-        .find("href=\"image/")
-        .ok_or(WallpaperGeneratorError::ImageGeneration(
-            "Today's Astronomy Picture of the Day does not have a downloadable image - try a different day or another generator".to_string()
-        ))?;
-    let (_, link) = webpage_html.split_at(pos_of_image_src);
+#[derive(Deserialize)]
+struct ApodCalendarResponse {
+    content: String,
+}
 
-    // Take second place which has the link
-    let mut separated = link.split('"');
-    separated.next();
-    Ok(separated
-        .next()
-        .ok_or(WallpaperGeneratorError::Parse(
-            "Expected a href URL here, received None. Report this error to developer".to_string(),
-        ))?
-        .to_string())
+#[derive(Deserialize)]
+struct ApodRandomResponse {
+    html: String,
+}
+
+/// Extracts the URL of the picture of the day.
+///
+/// 1. `<a href=".../cds/apod/apod/...">` — the link to the full-resolution asset.
+/// 2. `<img src=".../cds/apod/apod/...">` — the rendered image, for pages that do
+///    not wrap it in a link. `dynamicimage` copies are mapped back to the
+///    original `content/dam` file and the resize/crop query is dropped.
+///
+/// The landing page's `og:image` is a generic APOD banner rather than the
+/// picture of the day, so it is deliberately not used as a fallback.
+///
+/// Video entries (YouTube/Vimeo embeds) have no still picture of the day, so they
+/// return an error instead of downloading an unrelated thumbnail.
+fn retrieve_image_download_url(webpage_html: &str) -> Result<String, WallpaperGeneratorError> {
+    if is_video_page(webpage_html) {
+        return Err(WallpaperGeneratorError::ImageGeneration(
+            "This Astronomy Picture of the Day is a video - try a different day or another generator"
+                .to_string(),
+        ));
+    }
+
+    find_apod_asset_url(webpage_html, "href")
+        .or_else(|| find_apod_asset_url(webpage_html, "src"))
+        .ok_or_else(|| {
+            WallpaperGeneratorError::ImageGeneration(
+                "Today's Astronomy Picture of the Day does not have a downloadable image - try a different day or another generator".to_string()
+            )
+        })
+}
+
+/// Whether the page embeds a video rather than a picture.
+fn is_video_page(html: &str) -> bool {
+    html.contains("youtube.com/embed")
+        || html.contains("player.vimeo.com")
+        || html.contains("property=\"og:video\"")
+}
+
+/// Finds the first `attribute="..."` URL pointing at an APOD image asset.
+///
+/// `href` links point at the original, highest-resolution file; `src` is the
+/// rendered `<img>` and is the fallback for pages that do not link the image.
+/// `/jcr:content/` URLs are resized renditions, so they are skipped.
+fn find_apod_asset_url(html: &str, attribute: &str) -> Option<String> {
+    let needle = format!("{attribute}=\"");
+    let mut rest = html;
+    while let Some(index) = rest.find(&needle) {
+        let after = &rest[index + needle.len()..];
+        let end = after.find('"')?;
+        let url = &after[..end];
+        if url.contains(APOD_ASSET_MARKER) && !url.contains("/jcr:content/") {
+            return Some(original_asset_url(url));
+        }
+        rest = &after[end..];
+    }
+    None
+}
+
+/// Returns the original asset URL for an APOD image link.
+///
+/// `dynamicimage` URLs are resized copies, so they are mapped to the
+/// `content/dam` original. Query parameters (`?w=...&h=...`) are renditions and
+/// are dropped as well.
+fn original_asset_url(url: &str) -> String {
+    strip_query(url).replace("/dynamicimage/assets/", "/content/dam/")
+}
+
+/// Drops `?query` from a URL, keeping the path to the original asset.
+fn strip_query(url: &str) -> &str {
+    url.split_once('?').map_or(url, |(path, _)| path)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -337,24 +600,171 @@ mod tests {
     }
 
     #[test]
-    fn test_retrieve_image_download_url_valid() {
+    fn test_retrieve_image_download_url_dynamic_image_maps_to_original() {
+        // The landing page renders a resized `dynamicimage` copy without linking it.
+        let html = r#"<img width="1960" height="2048" src="https://assets.science.nasa.gov/dynamicimage/assets/science/cds/apod/apod/2026/october/OrionSword_Palaia_2000.jpg?w=1960&amp;h=2048&amp;fit=clip&amp;crop=faces%2Cfocalpoint" />"#;
+
+        let result = retrieve_image_download_url(html).unwrap();
+        assert_eq!(
+            result,
+            "https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2026/october/OrionSword_Palaia_2000.jpg"
+        );
+    }
+
+    #[test]
+    fn test_retrieve_image_download_url_skips_renditions() {
+        // The first match is a resized rendition; the original must win.
         let html = r#"
-            <html>
-                <body>
-                    <a href="image/2604/test_image.jpg">Link</a>
-                </body>
-            </html>
+            <a href="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2025/january/AlphaCen_Cantrell_960.jpg/jcr:content/renditions/cq5dam.web.1280.1280.jpeg">rendition</a>
+            <a href="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2025/january/AlphaCen_Cantrell_960.jpg">original</a>
         "#;
 
-        let result = retrieve_image_download_url(html.to_string()).unwrap();
-        assert_eq!(result, "image/2604/test_image.jpg");
+        let result = retrieve_image_download_url(html).unwrap();
+        assert_eq!(
+            result,
+            "https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2025/january/AlphaCen_Cantrell_960.jpg"
+        );
+    }
+
+    #[test]
+    fn test_retrieve_image_download_url_linked_full_resolution_asset() {
+        // Current pages wrap the rendered image in a link to the original file.
+        let html = r#"
+            <meta property="og:image" content="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2024/january/ngc1232b_vlt_3969.jpg/jcr:content/renditions/cq5dam.web.1280.1280.jpeg" />
+            <figure>
+                <a href="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2024/january/ngc1232b_vlt_3969.jpg">
+                    <img src="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2024/january/ngc1232b_vlt_3969.jpg?w=960&amp;h=909&amp;fit=clip" />
+                </a>
+            </figure>
+        "#;
+
+        let result = retrieve_image_download_url(html).unwrap();
+        assert_eq!(
+            result,
+            "https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2024/january/ngc1232b_vlt_3969.jpg"
+        );
+    }
+
+    #[test]
+    fn test_retrieve_image_download_url_img_src_without_link() {
+        // Some pages render the image without wrapping it in an <a>.
+        let html = r#"<img width="960" src="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2025/january/AlphaCen_Cantrell_960.jpg?w=960&amp;h=909&amp;fit=clip" />"#;
+
+        let result = retrieve_image_download_url(html).unwrap();
+        assert_eq!(
+            result,
+            "https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2025/january/AlphaCen_Cantrell_960.jpg"
+        );
+    }
+
+    #[test]
+    fn test_retrieve_image_download_url_ignores_og_image_banner() {
+        // The landing page's og:image is the APOD banner, not the picture of the day.
+        let html = r#"<meta property="og:image" content="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2026/june/eagle.jpg/jcr:content/renditions/cq5dam.web.1280.1280.jpeg" />"#;
+
+        let err = retrieve_image_download_url(html).unwrap_err();
+
+        match err {
+            WallpaperGeneratorError::ImageGeneration(msg) => {
+                assert!(msg.contains("does not have a downloadable image"))
+            }
+            e => panic!("Expected ImageGeneration error: {e}"),
+        }
+    }
+
+    #[test]
+    fn test_retrieve_image_download_url_old_gif() {
+        // 1995-2002 entries are still GIFs, so the gif decoder must stay enabled.
+        let html = r#"
+            <a href="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/1995/june/pleiades2.gif" target="_blank">
+                <img src="https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/1995/june/pleiades2.gif" />
+            </a>
+        "#;
+
+        let result = retrieve_image_download_url(html).unwrap();
+        assert_eq!(
+            result,
+            "https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/1995/june/pleiades2.gif"
+        );
+    }
+
+    #[test]
+    fn test_retrieve_image_download_url_video_page() {
+        let html = r#"
+            <meta property="og:video" content="https://www.youtube.com/v/dY6poe072_c" />
+            <iframe src="https://www.youtube.com/embed/dY6poe072_c"></iframe>
+        "#;
+
+        let err = retrieve_image_download_url(html).unwrap_err();
+
+        match err {
+            WallpaperGeneratorError::ImageGeneration(msg) => {
+                assert!(msg.contains("is a video"), "unexpected message: {msg}")
+            }
+            e => panic!("Expected ImageGeneration error: {e}"),
+        }
+    }
+
+    #[test]
+    fn test_find_calendar_entry_returns_the_requested_day() {
+        let calendar = r#"
+            <div class="calendar-cell has-posts" data-date="2025-01-01" aria-label="January 1, 2025: 1 post">
+                <a href="https://science.nasa.gov/image-article/apod-2025-january-1-alpha-centauri/" class="calendar-post-tile">1</a>
+            </div>
+            <div class="calendar-cell has-posts" data-date="2025-01-02" aria-label="January 2, 2025: 1 post">
+                <a href="https://science.nasa.gov/image-article/apod-2025-january-2-the-sun/" class="calendar-post-tile">2</a>
+            </div>
+        "#;
+
+        assert_eq!(
+            find_calendar_entry(calendar, "2025-01-01").as_deref(),
+            Some("https://science.nasa.gov/image-article/apod-2025-january-1-alpha-centauri/")
+        );
+        assert_eq!(
+            find_calendar_entry(calendar, "2025-01-02").as_deref(),
+            Some("https://science.nasa.gov/image-article/apod-2025-january-2-the-sun/")
+        );
+    }
+
+    #[test]
+    fn test_find_calendar_entry_without_a_post() {
+        // APOD starts on 1995 June 20; earlier days are empty calendar cells.
+        let calendar = r#"
+            <div class="calendar-cell" data-date="1995-06-01" aria-label="June 1, 1995: No posts"></div>
+            <div class="calendar-cell has-posts" data-date="1995-06-20" aria-label="June 20, 1995: 1 post">
+                <a href="https://science.nasa.gov/image-article/apod-1995-june-20-pleiades-star-cluster/">20</a>
+            </div>
+        "#;
+
+        assert_eq!(find_calendar_entry(calendar, "1995-06-01"), None);
+        assert_eq!(
+            find_calendar_entry(calendar, "1995-06-20").as_deref(),
+            Some("https://science.nasa.gov/image-article/apod-1995-june-20-pleiades-star-cluster/")
+        );
+    }
+
+    #[test]
+    fn test_find_calendar_entry_unknown_day() {
+        let calendar = r#"<div class="calendar-cell" data-date="2025-01-01"></div>"#;
+
+        assert_eq!(find_calendar_entry(calendar, "2025-02-01"), None);
+    }
+
+    #[test]
+    fn test_original_asset_url_maps_dynamic_image_host() {
+        assert_eq!(
+            original_asset_url(
+                "https://assets.science.nasa.gov/dynamicimage/assets/science/cds/apod/apod/2026/october/OrionSword_Palaia_2000.jpg?w=1960&amp;h=2048&amp;fit=clip"
+            ),
+            "https://assets.science.nasa.gov/content/dam/science/cds/apod/apod/2026/october/OrionSword_Palaia_2000.jpg"
+        );
     }
 
     #[test]
     fn test_retrieve_image_download_url_missing_tag() {
         let html = "<html><body>No image here</body></html>";
 
-        let err = retrieve_image_download_url(html.to_string()).unwrap_err();
+        let err = retrieve_image_download_url(html).unwrap_err();
 
         match err {
             WallpaperGeneratorError::ImageGeneration(msg) => {
@@ -374,7 +784,7 @@ mod tests {
             </html>
         "#;
 
-        let err = retrieve_image_download_url(html.to_string()).unwrap_err();
+        let err = retrieve_image_download_url(html).unwrap_err();
 
         match err {
             WallpaperGeneratorError::ImageGeneration(msg) => {

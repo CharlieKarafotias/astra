@@ -68,6 +68,9 @@ pub enum Generator {
         /// Specify specific day (format: YYMMDD)
         #[arg(value_parser = parse_yymmdd)]
         date: Option<ApodDate>,
+        /// Use a random picture of the day instead of a specific date
+        #[arg(long, conflicts_with = "date")]
+        random: bool,
     },
     /// Sets wallpaper to a solid color
     Solid {
@@ -84,7 +87,10 @@ impl FromStr for Generator {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "julia" => Ok(Generator::Julia),
-            "nasa_apod" => Ok(Generator::NasaAPOD { date: None }),
+            "nasa_apod" => Ok(Generator::NasaAPOD {
+                date: None,
+                random: false,
+            }),
             "spotlight" => Ok(Generator::Spotlight),
             "solid" => Ok(Generator::Solid {
                 mode: SolidMode::Random,
@@ -101,7 +107,7 @@ impl Generator {
     ) -> Result<AstraImage, WallpaperGeneratorError> {
         match self {
             Generator::Julia => generate_julia_set(config),
-            Generator::NasaAPOD { date } => generate_nasa_apod(config, date),
+            Generator::NasaAPOD { date, random } => generate_nasa_apod(config, date, *random),
             Generator::Solid { mode } => generate_solid_color(config, mode),
             Generator::Spotlight => generate_bing_spotlight(config),
         }
@@ -110,7 +116,7 @@ impl Generator {
     pub fn prefix(&self) -> &str {
         match self {
             Generator::Julia => "julia",
-            Generator::NasaAPOD { date: _ } => "nasa_apod",
+            Generator::NasaAPOD { date: _, random: _ } => "nasa_apod",
             Generator::Solid { mode: _ } => "solid",
             Generator::Spotlight => "spotlight",
         }
