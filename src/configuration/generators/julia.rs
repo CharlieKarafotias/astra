@@ -1,17 +1,25 @@
+use schemars::JsonSchema;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter, Write};
 
-#[derive(Debug, Default, Deserialize, PartialEq)]
+/// Options for the Julia fractal generator.
+#[derive(Debug, Default, Deserialize, JsonSchema, PartialEq)]
 pub struct JuliaConfig {
+    /// Color appearance to use: `Auto` follows the system appearance.
     appearance: Option<Appearance>,
+    /// Complex numbers as `[real, imaginary]` pairs. One is picked at random.
     complex_numbers: Option<Vec<(f64, f64)>>,
     // Iterations required to become a hotspot (higher = more detailed)
+    /// Iterations needed before a point counts as a hotspot (0-255). Higher
+    /// values generally add color variety.
     starting_sample_threshold: Option<u8>,
+    /// Use the color themes from the top-level `themes` setting.
     respect_color_themes: Option<bool>,
 }
 
 // TODO: relocate to color_themes
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq)]
+/// Preferred color appearance.
+#[derive(Copy, Clone, Debug, Deserialize, JsonSchema, PartialEq)]
 pub(crate) enum Appearance {
     Auto,
     Light,

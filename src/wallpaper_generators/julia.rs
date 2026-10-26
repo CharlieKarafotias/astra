@@ -8,7 +8,7 @@ use crate::configuration::generators::julia::Appearance;
 use image::{ImageBuffer, Rgb};
 use num_complex::Complex;
 use rand::random_range;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 
 const COMPLEX_NUMS: [(f64, f64); 13] = [
     (-0.79, 0.15),
@@ -87,21 +87,26 @@ pub fn generate_julia_set(config: &Config) -> Result<AstraImage, WallpaperGenera
     let mut imgbuf = ImageBuffer::new(width, height);
     config.print_if_verbose("Generating image...");
 
-    // Generate full julia set
-    imgbuf.par_enumerate_pixels_mut().for_each(|(x, y, pixel)| {
-        let cx = x as f64 * (scale_x / width as f64) + start_x;
-        let cy = y as f64 * (scale_y / height as f64) + start_y;
+    // Generate full julia set. `par_bridge` lets us parallelize the buffer's own
+    // iterator with astra's `rayon` dependency, so `image`'s `rayon` feature (which
+    // pulls in unused EXR/AVIF decoders) does not have to be enabled.
+    imgbuf
+        .enumerate_pixels_mut()
+        .par_bridge()
+        .for_each(|(x, y, pixel)| {
+            let cx = x as f64 * (scale_x / width as f64) + start_x;
+            let cy = y as f64 * (scale_y / height as f64) + start_y;
 
-        let c = selected_julia_set;
-        let mut z = Complex::new(cx, cy);
+            let c = selected_julia_set;
+            let mut z = Complex::new(cx, cy);
 
-        let mut i = 0;
-        while i < 255 && z.norm() <= 2.0 {
-            z = z * z + c;
-            i += 1;
-        }
-        *pixel = Rgb(color_map[i]);
-    });
+            let mut i = 0;
+            while i < 255 && z.norm() <= 2.0 {
+                z = z * z + c;
+                i += 1;
+            }
+            *pixel = Rgb(color_map[i]);
+        });
 
     config.print_if_verbose("Image generated!");
 

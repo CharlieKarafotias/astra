@@ -43,7 +43,7 @@ themes via config. Generators can opt into `respect_color_themes`.
 - `astra` — auto mode (config-driven).
 - `astra generate <generator> [--no-save] [--no-update]` — explicit generation;
   bypasses global config (frequency, generator list) but honors per-generator options.
-  - `nasa-apod [--date YYMMDD]`
+  - `nasa-apod [YYMMDD] [--random]`
   - `solid <color <name>|random|rgb <r> <g> <b>>`
 - `astra clean [--older-than <freq>] [--directory]` — delete cached wallpapers.
 - `astra config [--open]` — create/print config path; `--open` opens it in `$EDITOR`.
@@ -77,9 +77,23 @@ with a warning (TODO: partial processing).
   modules (dark-mode detection, resolution, `update_wallpaper`, schedulers).
 
 Wallpapers are saved to `<data_dir>/Wallpapers/` as `<prefix>_<unix_timestamp>.png`
-(macOS alternates `astra_1.png`/`astra_2.png` to defeat caching). `julia`/`solid`
-use dark-mode-aware palettes via per-OS detection. Linux wallpaper support is
-GNOME-only.
+on all platforms. `julia`/`solid` use dark-mode-aware palettes via per-OS
+detection. Linux wallpaper support is GNOME-only. On macOS, auto-clean and
+`astra clean` also remove deleted Astra wallpapers from the System Settings
+wallpaper gallery ("Your Photos"), including their cached thumbnails. The
+WallpaperAgent and image wallpaper extension processes are restarted so the
+gallery refreshes immediately.
+
+The gallery is backed by two undocumented stores that both have to be pruned:
+WallpaperAgent's view-model cache
+(`$TMPDIR/../C/com.apple.wallpaper.agent/com.apple.wallpaper.view-model-cache/extension-com.apple.wallpaper.extension.image-desktop`)
+and the image extension's history
+(`~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist`,
+`ChoiceRequests.ImageFiles`). Thumbnails live under
+`~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Caches`.
+Astra prunes only entries that point at missing files inside its own wallpapers
+directory; everything else (including bookmark data and timestamps of kept
+entries) is left untouched.
 
 ## 4. Releases
 

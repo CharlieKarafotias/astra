@@ -21,6 +21,36 @@ All configuration files must be written in **JSON**.
 }
 ```
 
+### Editor Autocomplete and Validation
+
+Astra ships a JSON Schema for this file, so editors can autocomplete keys and
+flag invalid values. To print it:
+
+```sh
+astra config --schema
+```
+
+Running `astra config` writes `config.schema.json` next to your `config.json`
+and points the config at it, so completion also works offline:
+
+```json
+{
+  "$schema": "./config.schema.json"
+}
+```
+
+> [!TIP]
+> Already have a `config.json`? Run `astra config` once. It adds only the
+> `$schema` line and leaves the rest of the file — including its formatting —
+> alone. Astra ignores the key at runtime.
+
+If your editor cannot resolve relative paths, point `$schema` at the
+committed copy instead:
+
+```text
+https://raw.githubusercontent.com/CharlieKarafotias/astra/main/docs/config.schema.json
+```
+
 ---
 
 ## Configuration File Locations
@@ -48,6 +78,11 @@ Units include seconds (`s`), minutes (`m`), hours (`h`), days (`d`), weeks (`w`)
 **Format:** `^\d+[smhdwMy]$`  
 **Example:** `"1w"`  
 **Default:** Never runs unless the user explicitly calls `astra clean`.
+
+On macOS, auto-clean (and `astra clean`) also removes deleted Astra wallpapers
+from the System Settings wallpaper gallery ("Your Photos"), including their cached
+thumbnails. Astra then restarts WallpaperAgent and the image wallpaper extension so
+the gallery refreshes immediately.
 
 ---
 

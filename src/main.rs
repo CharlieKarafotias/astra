@@ -21,6 +21,14 @@ use os_implementations::save_last_execution_time;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+
+    // Keep stdout machine-readable: printing the schema must not depend on the
+    // user's config or mix in verbose logging.
+    if matches!(&cli.command, Some(Commands::Config { schema: true, .. })) {
+        println!("{}", Config::json_schema());
+        return Ok(());
+    }
+
     let mut config = Config::new(cli.verbose);
 
     // TODO: Errors coming out in strange format. Fix this so its standardized (Error: ParseError("invalid...")) looks weird
@@ -37,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 delete_wallpapers(&config, true, directory, None)?;
             }
         }
-        Some(Commands::Config { open }) => {
+        Some(Commands::Config { open, .. }) => {
             config.print_if_verbose("Opening configuration file...");
             Config::create_config_file_if_not_exists(&config)?;
             if open {
@@ -51,10 +59,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             no_save,
             no_update,
         }) => {
-            config.print_if_verbose(format!("Generating image of type: {:?}...", &image).as_str());
+            config.print_if_verbose(format!("Generating image of type: {:?}...", image).as_str());
             let image_buf = match &image {
                 Generator::Julia => generate_julia_set(&config),
-                Generator::NasaAPOD { date } => generate_nasa_apod(&config, date),
+                Generator::NasaAPOD { date, random } => generate_nasa_apod(&config, date, *random),
                 Generator::Solid { mode } => generate_solid_color(&config, mode),
                 Generator::Spotlight => generate_bing_spotlight(&config),
             }?;

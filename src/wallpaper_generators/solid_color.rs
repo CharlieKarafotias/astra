@@ -7,6 +7,7 @@ use super::utils::{AstraImage, WallpaperGeneratorError};
 use clap::ValueEnum;
 use image::{ImageBuffer, Rgb};
 use rand::{RngExt, rng};
+use schemars::JsonSchema;
 use serde::Deserialize;
 
 pub fn generate_solid_color(
@@ -115,7 +116,8 @@ fn generate_image(mode: &SolidMode, width: u32, height: u32) -> AstraImage {
     }
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq, ValueEnum)]
+/// Named colors available to `solid_gen.preferred_default_colors`.
+#[derive(Copy, Clone, Debug, Deserialize, JsonSchema, PartialEq, ValueEnum)]
 pub enum Color {
     White,
     Black,

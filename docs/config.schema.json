@@ -1,0 +1,419 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Astra Configuration",
+  "description": "Astra's optional JSON configuration.",
+  "type": "object",
+  "properties": {
+    "auto_clean": {
+      "description": "Remove cached wallpapers older than this frequency (for example `\"1w\"`).",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Frequency"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "frequency": {
+      "description": "How often Astra should update the wallpaper automatically (for example `\"1d\"`).",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Frequency"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "generators": {
+      "description": "Generators Astra may choose from. One is picked at random on each run.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Generators"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "julia_gen": {
+      "description": "Julia fractal generator options.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/JuliaConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nasa_apod_gen": {
+      "description": "NASA Astronomy Picture of the Day generator options.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/NasaApodConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "solid_gen": {
+      "description": "Solid-color generator options.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SolidConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "spotlight_gen": {
+      "description": "Bing Spotlight generator options.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SpotlightConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "themes": {
+      "description": "Custom color themes used by generators that respect them.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ThemeConfigs"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "ApodDate": {
+      "description": "A date in YYMMDD format, for example \"260423\" for April 23rd, 2026.",
+      "type": "string",
+      "examples": [
+        "260423"
+      ],
+      "pattern": "^[0-9]{6}$"
+    },
+    "Appearance": {
+      "description": "Preferred color appearance.",
+      "type": "string",
+      "enum": [
+        "Auto",
+        "Light",
+        "Dark"
+      ]
+    },
+    "Color": {
+      "description": "Named colors available to `solid_gen.preferred_default_colors`.",
+      "type": "string",
+      "enum": [
+        "White",
+        "Black",
+        "LightGray",
+        "DarkGray",
+        "Silver",
+        "SlateGray",
+        "NavyBlue",
+        "SkyBlue",
+        "SteelBlue",
+        "Teal",
+        "ForestGreen",
+        "Olive",
+        "Lime",
+        "Maroon",
+        "Crimson",
+        "DeepPurple",
+        "Indigo",
+        "Orchid",
+        "Coral",
+        "Beige"
+      ]
+    },
+    "Frequency": {
+      "description": "A duration such as \"1d\" or \"6h\": a number followed by one of s (seconds), m (minutes), h (hours), d (days), w (weeks), M (months) or y (years).",
+      "type": "string",
+      "examples": [
+        "30m",
+        "6h",
+        "1d",
+        "1w"
+      ],
+      "pattern": "^[0-9]+[smhdwMy]$"
+    },
+    "Generators": {
+      "description": "Generators Astra may choose from. One is picked at random on each run.",
+      "type": "array",
+      "examples": [
+        [
+          "spotlight",
+          "solid"
+        ]
+      ],
+      "items": {
+        "type": "string",
+        "enum": [
+          "julia",
+          "nasa_apod",
+          "solid",
+          "spotlight"
+        ]
+      }
+    },
+    "JuliaConfig": {
+      "description": "Options for the Julia fractal generator.",
+      "type": "object",
+      "properties": {
+        "appearance": {
+          "description": "Color appearance to use: `Auto` follows the system appearance.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Appearance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "complex_numbers": {
+          "description": "Complex numbers as `[real, imaginary]` pairs. One is picked at random.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "number",
+                "format": "double"
+              },
+              {
+                "type": "number",
+                "format": "double"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        },
+        "respect_color_themes": {
+          "description": "Use the color themes from the top-level `themes` setting.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "starting_sample_threshold": {
+          "description": "Iterations needed before a point counts as a hotspot (0-255). Higher\nvalues generally add color variety.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      }
+    },
+    "NasaApodConfig": {
+      "description": "Options for the NASA Astronomy Picture of the Day generator.",
+      "type": "object",
+      "properties": {
+        "date_from": {
+          "description": "Earliest date to pick from, in `YYMMDD` format (for example `\"260423\"`).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ApodDate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "date_to": {
+          "description": "Latest date to pick from, in `YYMMDD` format (for example `\"260423\"`).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ApodDate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "SolidConfig": {
+      "description": "Options for the solid-color generator.",
+      "type": "object",
+      "properties": {
+        "preferred_default_colors": {
+          "description": "Named colors to pick from. One is picked at random.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Color"
+          }
+        },
+        "preferred_rgb_colors": {
+          "description": "RGB colors as `[r, g, b]` triples. One is picked at random.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              }
+            ],
+            "maxItems": 3,
+            "minItems": 3
+          }
+        },
+        "respect_color_themes": {
+          "description": "Use the color themes from the top-level `themes` setting instead of the\ncolor lists above.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "SpotlightConfig": {
+      "description": "Options for the Bing Spotlight generator.",
+      "type": "object",
+      "properties": {
+        "country": {
+          "description": "Country whose Spotlight feed to use, as an ISO 3166-1 alpha-2 code.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "locale": {
+          "description": "Locale variant for the feed, as a language-country code such as `\"en-GB\"`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "respect_color_themes": {
+          "description": "Prefer images that match the top-level color themes.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "ThemeConfig": {
+      "description": "A named set of colors generators can use.",
+      "type": "object",
+      "properties": {
+        "colors": {
+          "description": "RGB colors as `[r, g, b]` triples for light mode or general use.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              }
+            ],
+            "maxItems": 3,
+            "minItems": 3
+          }
+        },
+        "dark_mode_colors": {
+          "description": "RGB colors as `[r, g, b]` triples to use when dark mode is active.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              }
+            ],
+            "maxItems": 3,
+            "minItems": 3
+          }
+        },
+        "name": {
+          "description": "Display name for the theme.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "colors"
+      ]
+    },
+    "ThemeConfigs": {
+      "description": "The list of custom color themes.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ThemeConfig"
+      }
+    }
+  }
+}
