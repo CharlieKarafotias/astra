@@ -98,28 +98,20 @@ pub fn delete_wallpapers(
         for entry in read_dir(&path).map_err(|e| WallpaperGeneratorError::OS(e.to_string()))? {
             let entry = entry.map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
             let file_name = entry.file_name().to_string_lossy().to_string();
-            // string like spotlight_1640000000.png
-            let timestamp_str =
-                &file_name[file_name.rfind('_').map(|i| i + 1).unwrap_or(0)..file_name.len() - 4];
-            match timestamp_str.parse::<u64>() {
-                Ok(timestamp) => {
-                    if timestamp < oldest_timestamp_to_keep {
-                        remove_file(entry.path())
-                            .map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
-                        config.print_if_verbose(
-                            format!("Deleted image {} successfully", entry.path().display())
-                                .as_str(),
-                        );
-                    }
-                }
-                Err(_) => {
-                    config.print_if_verbose(format!(
-                        "ERROR: Encountered file that is not an astra formatted image, skipping file... {}",
-                        entry.path().display()
-                    ).as_str());
-                    continue;
-                }
+            let Some(timestamp) = wallpaper_timestamp(&file_name) else {
+                config.print_if_verbose(format!(
+                    "ERROR: Encountered file that is not an astra formatted image, skipping file... {}",
+                    entry.path().display()
+                ).as_str());
+                continue;
             };
+            if timestamp < oldest_timestamp_to_keep {
+                remove_file(entry.path())
+                    .map_err(|e| WallpaperGeneratorError::OS(e.to_string()))?;
+                config.print_if_verbose(
+                    format!("Deleted image {} successfully", entry.path().display()).as_str(),
+                );
+            }
         }
     }
 
@@ -129,6 +121,25 @@ pub fn delete_wallpapers(
     crate::os_implementations::prune_stale_wallpaper_gallery_entries(config, &path);
 
     Ok(())
+}
+
+/// Extracts the Unix timestamp from an Astra wallpaper file name
+/// (`<prefix>_<unix_timestamp>.png`).
+///
+/// Returns `None` for anything that does not match that shape, including names
+/// shorter than `_<timestamp>.png`, names without an underscore, non-numeric
+/// timestamps, and names that are not valid UTF-8 (the caller stringifies with
+/// `to_string_lossy`). `delete_wallpapers` skips those files, so a stray file in the
+/// wallpapers directory can never panic or abort a clean; previously the timestamp
+/// was sliced by byte index, which panicked on short names and could split a UTF-8
+/// character.
+///
+/// Legacy `astra_1.png`/`astra_2.png` files (from the old macOS slot scheme) parse as
+/// timestamps 1 and 2, so they are deleted by the next `--older-than` clean.
+fn wallpaper_timestamp(file_name: &str) -> Option<u64> {
+    let stem = file_name.strip_suffix(".png")?;
+    let (_, timestamp) = stem.rsplit_once('_')?;
+    timestamp.parse().ok()
 }
 
 /// Removes stale Astra wallpapers from the macOS System Settings "Your Photos"
@@ -924,6 +935,54 @@ impl Error for WallpaperGeneratorError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_wallpaper_timestamp_parses_astra_names() {
+        assert_eq!(
+            wallpaper_timestamp("spotlight_1640000000.png"),
+            Some(1_640_000_000)
+        );
+        assert_eq!(
+            wallpaper_timestamp("my_wall_1640000000.png"),
+            Some(1_640_000_000)
+        );
+        // Legacy macOS slot files must still be deletable.
+        assert_eq!(wallpaper_timestamp("astra_1.png"), Some(1));
+        assert_eq!(wallpaper_timestamp("astra_2.png"), Some(2));
+    }
+
+    #[test]
+    fn test_wallpaper_timestamp_rejects_other_names() {
+        // These used to panic: shorter than 4 bytes, or a UTF-8 character split by
+        // the old byte-index slice.
+        for name in ["", "a", ".png", "a.png", "🙂.png"] {
+            assert_eq!(
+                wallpaper_timestamp(name),
+                None,
+                "unexpectedly parsed {name}"
+            );
+        }
+        // A non-ASCII prefix is fine as long as the timestamp segment is numeric.
+        assert_eq!(wallpaper_timestamp("é_1.png"), Some(1));
+
+        for name in [
+            "solid_123",     // missing the .png suffix
+            "solid_abc.png", // non-numeric timestamp
+            "solid_123.jpg", // wrong extension
+            "solid.png",     // no timestamp
+            "_.png",         // empty prefix and timestamp
+            "solid_-5.png",  // negative
+        ] {
+            assert_eq!(
+                wallpaper_timestamp(name),
+                None,
+                "unexpectedly parsed {name}"
+            );
+        }
+
+        // Only the segment after the last underscore is the timestamp.
+        assert_eq!(wallpaper_timestamp("solid_1_2.png"), Some(2));
+    }
 
     #[test]
     fn test_scale_image() {
