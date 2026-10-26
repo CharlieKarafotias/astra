@@ -131,24 +131,47 @@ pub fn delete_wallpapers(
     Ok(())
 }
 
-/// Removes stale Astra wallpapers from the macOS System Settings wallpaper gallery.
+/// Removes stale Astra wallpapers from the macOS System Settings "Your Photos"
+/// gallery.
 ///
-/// macOS records every image set as a wallpaper in a view-model cache that backs
-/// System Settings → Wallpaper → "Your Photos" (`viewModel.groups[].items[]`).
-/// Items are never dropped when the underlying file disappears, so the gallery
-/// accumulates an entry for every render. This removes only items whose `id.id`
-/// is a file under `wallpapers_dir` that no longer exists; the currently-set
-/// wallpaper, system pictures, other apps' images, and the synthetic "Add Photo"
-/// / shuffle entries are always kept.
+/// macOS records every image set as a wallpaper in WallpaperAgent's view-model
+/// cache, which is what System Settings → Wallpaper → "Your Photos" renders. Items
+/// are never dropped when the underlying file disappears, so the gallery grows by
+/// one entry per render. This removes only items whose `id.id` points at a file
+/// under `wallpapers_dir` that no longer exists. The currently-set wallpaper,
+/// system pictures, other apps' images, and the synthetic "Add Photo" / shuffle
+/// entries are always kept.
 ///
-/// Each removed item's thumbnail PNG is deleted only if it lives under
-/// `thumbnails_dir`, so a malformed cache can never delete files elsewhere.
+/// # Where to look when debugging
+///
+/// The cache is a binary plist; `plutil -p <path>` prints it readably.
+/// - wallpaper path: `viewModel.groups[].items[].id.id` (usually a plain path, but
+///   `file://` URLs and percent-encoded names are normalized too);
+/// - thumbnail path: `thumbnail.image.url.relative` (a `file://` URL pointing into
+///   the image extension's `Caches` directory).
+///
+/// Thumbnails are only deleted for items that were removed, and only when the path
+/// is under `thumbnails_dir`, so a malformed cache can never delete files
+/// elsewhere. They are deleted after the cache is rewritten: if the rewrite fails,
+/// leaving a few orphaned thumbnails behind is harmless, whereas deleting them
+/// first would leave the cache pointing at missing images.
 ///
 /// The cache is only rewritten when at least one item was removed, and the rewrite
-/// is atomic (temporary file + rename) so a failure cannot corrupt it. Returns the
-/// number of items removed. This never fails the caller: a missing file, parse
-/// error, or I/O error is reported via verbose logging and yields 0, because the
-/// cache format is undocumented and must never break a clean.
+/// is atomic (temporary file + rename), so a failure cannot corrupt it.
+///
+/// # Failure behavior
+///
+/// Returns the number of items removed and never fails the caller: a missing file,
+/// parse error, or I/O error is reported via verbose logging and yields 0, because
+/// this format is undocumented and must never break a clean. Panics are not
+/// possible here; every fallible step is handled with `?`-style matching or
+/// `Option`.
+///
+/// When debugging a clean that removed nothing, run with `-v`:
+/// - `WARN: could not read macOS wallpaper gallery` → the file could not be read or
+///   parsed (check the path and `plutil -p`);
+/// - no line at all → nothing matched: confirm the item's `id.id` really is under
+///   Astra's `Wallpapers` directory and the file really is gone.
 // Only called from the macOS implementation; on other targets this entry point
 // (and the helpers below, reachable only from it) is intentionally unused.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -195,19 +218,54 @@ pub fn prune_wallpaper_gallery_file(
 
 /// Removes stale Astra entries from the image wallpaper extension's history.
 ///
-/// The extension persists every image it has been asked to show in
-/// `ChoiceRequests.ImageFiles` inside its preferences plist, as an array of binary
-/// plist blobs holding an `originalURL` and a `copyURL` (thumbnail). WallpaperAgent
-/// rebuilds the System Settings gallery from that history, so pruning only the
-/// view-model cache is undone the next time a wallpaper is set. This drops history
-/// entries whose `originalURL` is a file under `wallpapers_dir` that no longer
-/// exists, plus their thumbnail copies.
+/// The image extension persists every image it has been asked to show in
+/// `ChoiceRequests.ImageFiles` inside its preferences plist. Each array element is
+/// itself a binary plist (stored as a plist `Data` blob) holding:
+/// - `originalURL.relative` — the wallpaper file, as a `file://` URL;
+/// - `copyURL.relative` — the thumbnail copy in the extension's `Caches` directory;
+/// - `dateAdded` — when the entry was added.
 ///
-/// Kept entries are preserved byte-for-byte (their blobs are not re-serialized), so
-/// bookmark data and timestamps survive untouched. The file is only rewritten when
-/// something was removed. Returns the number removed. This never fails the caller:
-/// a missing file, parse error, or I/O error is reported via verbose logging and
-/// yields 0.
+/// WallpaperAgent rebuilds the System Settings gallery from this history, so
+/// pruning only the view-model cache is undone the next time a wallpaper is set.
+/// This drops entries whose `originalURL` is a file under `wallpapers_dir` that no
+/// longer exists, plus their thumbnail copies.
+///
+/// # Why kept entries are not re-serialized
+///
+/// Only the array is rebuilt; each kept element is cloned as the original `Data`
+/// bytes. Re-encoding them would re-write out bookmark blobs and timestamp
+/// encodings that these undocumented plists use, so keeping the bytes untouched is
+/// both safer and necessary for System Settings to keep recognizing the entry.
+///
+/// # Freeze the extension first
+///
+/// `WallpaperImageExtension` holds the history in memory and rewrites this file
+/// when it exits. Called while it runs, this prune is silently undone later, so the
+/// macOS wrapper freezes both wallpaper services around this call (see
+/// `prune_stale_wallpaper_gallery_entries` in the macOS module).
+///
+/// # Failure behavior
+///
+/// Returns the number of entries removed. The file is only rewritten when
+/// something was removed, and the rewrite is atomic. This never fails the caller
+/// and cannot panic: a missing file, a plist parse error, or an I/O error is
+/// reported via verbose logging and yields 0.
+///
+/// # Where to look when debugging
+///
+/// `plutil -p <prefs>` shows the `ImageFiles` array but the nested blobs only as
+/// `<data>`; to read one entry:
+///
+/// ```text
+/// plutil -extract 'ChoiceRequests.ImageFiles.0' raw -o - \
+///   ~/Library/Containers/com.apple.wallpaper.extension.image/Data/Library/Preferences/com.apple.wallpaper.extension.image.plist \
+///   | plutil -p -
+/// ```
+///
+/// If clean removes nothing, check with `-v` for the matching
+/// `WARN: could not read macOS wallpaper gallery history` line, then confirm the
+/// entry's `originalURL.relative` is under Astra's `Wallpapers` directory and the
+/// file is gone.
 // Only called from the macOS implementation; on other targets this entry point
 // (and the helpers below, reachable only from it) is intentionally unused.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -278,6 +336,15 @@ pub fn prune_wallpaper_extension_image_files(
 }
 
 /// Reads a nested `{ "relative": "file://..." }` URL from a gallery history entry.
+///
+/// Both `originalURL` and `copyURL` in the extension's history use this shape:
+///
+/// ```text
+/// { "originalURL": { "relative": "file:///Users/me/.../solid_1700000000.png" } }
+/// ```
+///
+/// Returns `None` when the key is absent or has an unexpected type; callers treat
+/// that as "not ours", never as an error.
 // See the note on prune_wallpaper_extension_image_files: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn image_file_url(entry: &Value, key: &str) -> Option<String> {
@@ -292,8 +359,13 @@ fn image_file_url(entry: &Value, key: &str) -> Option<String> {
     )
 }
 
-/// Parses a `ChoiceRequests.ImageFiles` entry, returning it only if it points at a
-/// file under `wallpapers_dir` which no longer exists.
+/// Parses a `ChoiceRequests.ImageFiles` entry, returning the parsed entry only if it
+/// points at a file under `wallpapers_dir` which no longer exists.
+///
+/// The outer value is a `Data` blob containing a binary plist; a non-`Data` element
+/// or one that does not parse is treated as "keep" (it is not something Astra wrote,
+/// or the format changed and we must not delete blindly). Returning the parsed entry
+/// rather than a bool lets the caller read `copyURL` without parsing the blob twice.
 // See the note on prune_wallpaper_extension_image_files: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn stale_history_entry(entry: &Value, wallpapers_dir: &Path) -> Option<Value> {
@@ -308,8 +380,15 @@ fn stale_history_entry(entry: &Value, wallpapers_dir: &Path) -> Option<Value> {
 /// Whether the macOS wallpaper gallery or its history references an Astra wallpaper
 /// that no longer exists.
 ///
-/// The macOS implementation uses this to avoid stopping the wallpaper services when
-/// there is nothing to prune.
+/// This is a read-only pre-check used by the macOS implementation to avoid freezing
+/// and restarting the wallpaper services when a clean has nothing to remove. It
+/// reuses the same predicates as the pruners (`prune_stale_gallery_items` and
+/// `stale_history_entry`), so it cannot disagree with them about what counts as
+/// stale.
+///
+/// A missing or unparsable file yields `false` (skip pruning, change nothing):
+/// reporting "stale" for a file we cannot read would only cause a pointless service
+/// restart. Pass `None` for a store that does not exist.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn wallpaper_gallery_has_stale_entries(
     gallery_path: Option<&Path>,
@@ -338,8 +417,17 @@ pub fn wallpaper_gallery_has_stale_entries(
 }
 
 /// Serializes `value` as a binary plist and atomically replaces `path` with it.
-/// Preserves the original file permissions and leaves the file untouched on any
-/// failure. Returns whether the file was replaced.
+///
+/// Steps: serialize to memory → write a sibling `<name>.astra-tmp` → copy the
+/// original file's permissions onto it (the temp file would otherwise get the
+/// process umask) → `rename` over the original. `rename` within a directory is
+/// atomic, so a reader never sees a half-written plist. On any failure the original
+/// file is left untouched and the temp file is removed; the error is only reported
+/// under `-v` and the caller keeps its "never fail a clean" contract.
+///
+/// Returns whether the file was replaced. Cannot panic: the temp file name falls
+/// back to an empty string if `path` has no file name, which then fails the write
+/// and is reported rather than unwrapped.
 // See the note on prune_wallpaper_extension_image_files: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn write_plist_atomic(config: &Config, path: &Path, value: &Value, description: &str) -> bool {
@@ -377,6 +465,11 @@ fn write_plist_atomic(config: &Config, path: &Path, value: &Value, description: 
     true
 }
 
+/// Deletes cached thumbnails referenced by removed gallery/history entries.
+///
+/// Best effort by design: these are disposable cache files, and a failure to delete
+/// one must not turn a successful clean into an error. Callers only pass paths that
+/// were verified to live inside the extension's `Caches` directory.
 // See the note on prune_wallpaper_extension_image_files: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn remove_thumbnails(thumbnails: &[PathBuf]) {
@@ -385,8 +478,19 @@ fn remove_thumbnails(thumbnails: &[PathBuf]) {
     }
 }
 
-/// Drops gallery items that point at a deleted Astra wallpaper. Returns the number
-/// removed and collects the thumbnails that belonged to those items.
+/// Drops gallery items that point at a deleted Astra wallpaper.
+///
+/// Walks `viewModel.groups[].items[]` and removes an item only when
+/// `gallery_item_path` yields a path that is stale according to
+/// `is_stale_astra_path`. Items without a usable path (synthetic "Add Photo" /
+/// shuffle entries), items for files that still exist, and items for other apps are
+/// kept. Every group is visited because the gallery splits entries across groups
+/// (for example "Your Photos" vs "Pictures").
+///
+/// Returns the number of items removed and appends the thumbnails that belonged to
+/// them to `stale_thumbnails`; the caller deletes those after the rewrite succeeds.
+/// Pass `None` for `thumbnails_dir` to collect nothing (used by the read-only
+/// `wallpaper_gallery_has_stale_entries` check).
 // See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn prune_stale_gallery_items(
@@ -435,6 +539,19 @@ fn prune_stale_gallery_items(
 }
 
 /// The absolute wallpaper path stored in a gallery item (`id.id`).
+///
+/// Item shape (only the fields that matter here):
+///
+/// ```text
+/// {
+///   "id": { "id": "/Users/me/Library/.../Wallpapers/solid_1700000000.png" },
+///   "localizedName": "solid_1700000000",
+///   ...
+/// }
+/// ```
+///
+/// Returns `None` for items that do not carry a path (synthetic entries such as
+/// "Add Photo" or the shuffle item), which the pruner always keeps.
 // See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn gallery_item_path(item: &Value) -> Option<&str> {
@@ -446,6 +563,16 @@ fn gallery_item_path(item: &Value) -> Option<&str> {
 }
 
 /// The cached thumbnail path referenced by a gallery item, if any.
+///
+/// Items render their thumbnail from:
+///
+/// ```text
+/// "thumbnail": { "image": { "url": { "relative": "file:///Users/me/.../Caches/<uuid>.png" } } }
+/// ```
+///
+/// The URL is normalized to a plain [`PathBuf`]. Returns `None` when the item has no
+/// thumbnail or a shape we do not recognize; the item is then simply removed without
+/// touching any file.
 // See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn gallery_item_thumbnail_path(item: &Value) -> Option<PathBuf> {
@@ -463,8 +590,16 @@ fn gallery_item_thumbnail_path(item: &Value) -> Option<PathBuf> {
 }
 
 /// Whether `path_str` refers to a file under `wallpapers_dir` which no longer
-/// exists. Gallery paths are usually plain paths, but `file://` URLs and
-/// percent-encoded names are normalized too.
+/// exists.
+///
+/// Must stay narrow: a path is stale only when it starts with Astra's own
+/// `Wallpapers` directory **and** does not exist. That single predicate is what
+/// keeps the currently-set wallpaper, other apps' photos, and system pictures safe,
+/// so do not broaden it (for example, do not treat any missing file as stale).
+///
+/// Gallery paths are usually plain absolute paths, but entries written by older
+/// versions or with unusual file names can be `file://` URLs and/or percent-encoded,
+/// so both are normalized first.
 // See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn is_stale_astra_path(path_str: &str, wallpapers_dir: &Path) -> bool {
@@ -474,6 +609,16 @@ fn is_stale_astra_path(path_str: &str, wallpapers_dir: &Path) -> bool {
 
 /// Normalizes a path string into a filesystem path: strips a `file://` scheme
 /// (including a `localhost` host) and percent-decodes `%XX` sequences.
+///
+/// Examples:
+/// - `/Users/me/a.png` → `/Users/me/a.png`
+/// - `file:///Users/me/my%20wall.png` → `/Users/me/my wall.png`
+/// - `file://localhost/tmp/x.png` → `/tmp/x.png`
+///
+/// This is a string-level normalization, not a URL parser: anything that is not a
+/// `%XX` escape is left as-is, and the result is only ever compared against
+/// `wallpapers_dir` or used as a file path to delete (guarded by a
+/// `starts_with(thumbnails_dir)` check at the call site).
 // See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn normalize_file_url_path(path_str: &str) -> PathBuf {
@@ -488,6 +633,13 @@ fn normalize_file_url_path(path_str: &str) -> PathBuf {
 
 /// Decodes `%XX` hex sequences in `input`, leaving anything else (including
 /// malformed sequences) untouched.
+///
+/// Deliberately lenient rather than strict: a malformed escape (a lone `%`, or
+/// non-hex digits) is copied through unchanged instead of erroring, because this
+/// runs on undocumented system data and must never fail a clean. Decoding produces
+/// bytes and then uses `from_utf8_lossy`, so invalid UTF-8 cannot panic; it is only
+/// used to build a path that is compared against, and deleted inside, known
+/// directories.
 // See the note on prune_wallpaper_gallery_file: macOS-only entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn percent_decode(input: &str) -> String {

@@ -190,10 +190,34 @@ fn wallpaper_gallery_history_path() -> Option<PathBuf> {
 /// has nothing to remove does not disturb the running wallpaper. An open System
 /// Settings window can still re-add just-pruned entries from its own copy of the
 /// history; the next clean (for example the next auto-clean) removes them again.
+/// The extension also records a wallpaper shortly after it is set, so a file deleted
+/// within seconds of being generated can be added to the history after this prune;
+/// that entry is likewise removed by the next clean.
 ///
 /// This never fails a clean: missing or unparsable files, or any I/O error, are
 /// reported via verbose logging and skipped, because these formats are undocumented
 /// and must never break wallpaper generation or deletion.
+///
+/// # Debugging
+///
+/// - `astra -v clean --older-than 1y` exercises the prune without deleting anything
+///   (the age filter is irrelevant; the prune always runs after a clean). Expect
+///   `Stopping macOS wallpaper services to prune the wallpaper gallery` followed by
+///   one `Removed N stale Astra entries from ...` line per store that had something
+///   to remove.
+/// - Nothing printed after the "Deleting images" lines means
+///   `wallpaper_gallery_has_stale_entries` found nothing to do: the stores have no
+///   Astra entries, or their files still exist. Compare the paths in the stores with
+///   `ls` of Astra's `Wallpapers` directory.
+/// - Inspect either store with `plutil -p <path>`; the paths are built by
+///   `wallpaper_gallery_path` and `wallpaper_gallery_history_path` above.
+/// - Entries that reappear after a prune usually mean System Settings is open (it
+///   holds its own copy and re-adds them on refresh); close it and prune again. A
+///   file deleted within seconds of being generated can also be recorded by the
+///   extension after the prune; that is removed by the next clean. If they reappear
+///   with System Settings closed, look for the
+///   `WARN: could not stop the macOS wallpaper services` line: the extension was not
+///   frozen and flushed its in-memory history over the pruned file.
 pub fn prune_stale_wallpaper_gallery_entries(config: &Config, wallpapers_dir: &Path) {
     let gallery_path = wallpaper_gallery_path();
     let history_path = wallpaper_gallery_history_path();
@@ -210,24 +234,78 @@ pub fn prune_stale_wallpaper_gallery_entries(config: &Config, wallpapers_dir: &P
     let _frozen = FrozenWallpaperAgents::new(config);
 
     let thumbnails_dir = wallpaper_gallery_thumbnails_dir();
-    if let Some(gallery_path) = &gallery_path {
-        crate::wallpaper_generators::prune_wallpaper_gallery_file(
-            config,
-            gallery_path,
-            wallpapers_dir,
-            thumbnails_dir.as_deref(),
-        );
-    }
-    if let Some(history_path) = &history_path {
-        crate::wallpaper_generators::prune_wallpaper_extension_image_files(
-            config,
-            history_path,
-            wallpapers_dir,
-            thumbnails_dir.as_deref(),
-        );
-    }
+    prune_gallery_stores_with_retries(
+        config,
+        gallery_path.as_deref(),
+        history_path.as_deref(),
+        wallpapers_dir,
+        thumbnails_dir.as_deref(),
+    );
 }
 
+/// Rewrites both gallery stores, retrying when a frozen service's already-queued
+/// write lands after ours and restores the entries we just removed.
+///
+/// `SIGSTOP` stops new writes, but a write the extension handed to cfprefsd before
+/// the stop (or a partially written view-model cache) can still hit disk afterwards.
+/// A single prune therefore loses that race intermittently. After each rewrite this
+/// waits for those writes to settle and checks the files again, repeating a bounded
+/// number of times. Once the queue has drained the prune sticks, because the
+/// services are stopped and cannot queue anything new.
+///
+/// This cannot help with an entry the extension records *after* the freeze (for
+/// example a file deleted seconds after it was generated); that is removed by the
+/// next clean, as noted on the caller.
+fn prune_gallery_stores_with_retries(
+    config: &Config,
+    gallery_path: Option<&Path>,
+    history_path: Option<&Path>,
+    wallpapers_dir: &Path,
+    thumbnails_dir: Option<&Path>,
+) {
+    /// How long to wait for queued writes to land before re-checking.
+    const SETTLE_DELAY: std::time::Duration = std::time::Duration::from_millis(150);
+    /// Bounded so a permanent writer (or a bug) cannot hang `astra clean`.
+    const MAX_ATTEMPTS: usize = 5;
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        if let Some(gallery_path) = gallery_path {
+            crate::wallpaper_generators::prune_wallpaper_gallery_file(
+                config,
+                gallery_path,
+                wallpapers_dir,
+                thumbnails_dir,
+            );
+        }
+        if let Some(history_path) = history_path {
+            crate::wallpaper_generators::prune_wallpaper_extension_image_files(
+                config,
+                history_path,
+                wallpapers_dir,
+                thumbnails_dir,
+            );
+        }
+
+        std::thread::sleep(SETTLE_DELAY);
+        if !crate::wallpaper_generators::wallpaper_gallery_has_stale_entries(
+            gallery_path,
+            history_path,
+            wallpapers_dir,
+        ) {
+            return;
+        }
+        config.print_if_verbose(
+            format!(
+                "Stale wallpaper gallery entries reappeared after pruning (attempt {attempt}); pruning again"
+            )
+            .as_str(),
+        );
+    }
+
+    config.print_if_verbose(
+        "WARN: macOS wallpaper gallery entries kept reappearing; the next clean will try again",
+    );
+}
 /// Freezes the two macOS wallpaper services so they cannot restore the pruned
 /// history, and kills them when dropped.
 ///
@@ -238,22 +316,41 @@ pub fn prune_stale_wallpaper_gallery_entries(config: &Config, wallpapers_dir: &P
 /// without a flush, and launchd relaunches both services with the pruned files.
 ///
 /// The kill happens in `Drop` so a panic while pruning still leaves working
-/// wallpaper services behind.
+/// wallpaper services behind. Failure modes are non-fatal and degrade safely:
+/// - if `SIGSTOP` cannot be delivered, the prune still runs, but the extension may
+///   later overwrite it from memory; the next successful clean fixes that;
+/// - if `SIGKILL` cannot be delivered, the services are resumed with `SIGCONT` so a
+///   stopped wallpaper process can never be left behind;
+/// - the struct is only constructed after stale entries were confirmed, so a clean
+///   with nothing to do never touches the services at all.
+///
+/// The one thing `Drop` cannot cover is astra itself being killed by a signal
+/// (SIGINT/SIGTERM do not run destructors) in the milliseconds between `SIGSTOP` and
+/// `SIGKILL`; a logout or restart recovers from that state.
 struct FrozenWallpaperAgents;
 
 impl FrozenWallpaperAgents {
     fn new(config: &Config) -> Self {
         config.print_if_verbose("Stopping macOS wallpaper services to prune the wallpaper gallery");
-        if let Err(e) = Command::new("killall")
+        // `output()` rather than `status()` so `killall`'s stderr is captured: when
+        // one of the services is not running, `killall` prints
+        // "No matching processes belonging to you were found" and exits non-zero,
+        // which is harmless here (there is no in-memory state to flush) and must not
+        // show up in the user's terminal.
+        match Command::new("killall")
             .args(["-STOP", "WallpaperImageExtension", "WallpaperAgent"])
-            .status()
+            .output()
         {
-            config.print_if_verbose(
+            Ok(output) if !output.status.success() => config.print_if_verbose(
+                "No macOS wallpaper service was running; nothing to freeze before pruning",
+            ),
+            Ok(_) => {}
+            Err(e) => config.print_if_verbose(
                 format!(
-                    "WARN: could not stop the macOS wallpaper services: {e}; the gallery will refresh after the next login"
+                    "WARN: could not stop the macOS wallpaper services: {e}; stale gallery entries may reappear until a later clean succeeds"
                 )
                 .as_str(),
-            );
+            ),
         }
         Self
     }
@@ -264,9 +361,21 @@ impl Drop for FrozenWallpaperAgents {
         // Let cfprefsd notice the rewritten preference files before the services
         // restart and read them.
         std::thread::sleep(std::time::Duration::from_millis(50));
-        let _ = Command::new("killall")
+        // Best effort, and intentionally no error handling: a failure here must never
+        // turn a successful clean into a panic while unwinding.
+        let killed = Command::new("killall")
             .args(["-9", "WallpaperImageExtension", "WallpaperAgent"])
-            .status();
+            .output();
+        let killed_all = matches!(&killed, Ok(output) if output.status.success());
+        if !killed_all {
+            // Either no process matched (already gone; harmless) or the kill failed
+            // (for example `killall` could not be spawned). Resuming is safe in both
+            // cases and guarantees we never leave a SIGSTOPped wallpaper service
+            // behind, which would stop wallpaper updates until the next login.
+            let _ = Command::new("killall")
+                .args(["-CONT", "WallpaperImageExtension", "WallpaperAgent"])
+                .output();
+        }
     }
 }
 
