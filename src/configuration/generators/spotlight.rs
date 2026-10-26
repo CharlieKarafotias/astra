@@ -1,11 +1,16 @@
+use schemars::JsonSchema;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter, Write};
 
+/// Options for the Bing Spotlight generator.
 // looks to be [ISO_3166-1_alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#US), test to confirm
-#[derive(Debug, Default, Deserialize, PartialEq)]
+#[derive(Debug, Default, Deserialize, JsonSchema, PartialEq)]
 pub struct SpotlightConfig {
+    /// Country whose Spotlight feed to use, as an ISO 3166-1 alpha-2 code.
     country: Option<String>,
+    /// Locale variant for the feed, as a language-country code such as `"en-GB"`.
     locale: Option<String>,
+    /// Prefer images that match the top-level color themes.
     respect_color_themes: Option<bool>,
 }
 

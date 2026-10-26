@@ -32,11 +32,14 @@ pub enum Commands {
         /// Deletes all images and the "astra_wallpapers" directory
         directory: bool,
     },
-    /// Return path to configuration file (creates config first if it doesn't exist)
+    /// Return path to configuration file (creates it and its JSON Schema if needed)
     Config {
         #[arg(short, long)]
         /// Open the configuration file in the default text editor
         open: bool,
+        #[arg(short, long, conflicts_with = "open")]
+        /// Print the JSON schema for the configuration file
+        schema: bool,
     },
     /// Generates a new wallpaper
     Generate {

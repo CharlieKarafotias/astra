@@ -1,10 +1,14 @@
 use super::super::super::wallpaper_generators::ApodDate;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter, Write};
 
-#[derive(Debug, Default, Deserialize, PartialEq)]
+/// Options for the NASA Astronomy Picture of the Day generator.
+#[derive(Debug, Default, Deserialize, JsonSchema, PartialEq)]
 pub struct NasaApodConfig {
+    /// Earliest date to pick from, in `YYMMDD` format (for example `"260423"`).
     date_from: Option<ApodDate>,
+    /// Latest date to pick from, in `YYMMDD` format (for example `"260423"`).
     date_to: Option<ApodDate>,
 }
 

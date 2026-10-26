@@ -1,5 +1,7 @@
 use super::config::ConfigError;
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::Deserialize;
+use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
 /// Enum for all schedule type options supported by schtasks in Windows systems
@@ -246,6 +248,21 @@ impl Frequency {
 impl Display for Frequency {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl JsonSchema for Frequency {
+    fn schema_name() -> Cow<'static, str> {
+        "Frequency".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "pattern": "^[0-9]+[smhdwMy]$",
+            "description": "A duration such as \"1d\" or \"6h\": a number followed by one of s (seconds), m (minutes), h (hours), d (days), w (weeks), M (months) or y (years).",
+            "examples": ["30m", "6h", "1d", "1w"]
+        })
     }
 }
 

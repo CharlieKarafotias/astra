@@ -132,6 +132,15 @@ impl Config {
         Self::config_dir().join("config.json")
     }
 
+    pub fn schema_path() -> PathBuf {
+        Self::config_dir().join("config.schema.json")
+    }
+
+    /// Renders the configuration as a draft-07 JSON Schema.
+    pub fn json_schema() -> String {
+        UserConfig::json_schema()
+    }
+
     pub fn create_config_file_if_not_exists(config: &Config) -> Result<(), ConfigError> {
         if !Self::config_path().exists() {
             config.print_if_verbose(
@@ -152,9 +161,28 @@ impl Config {
             );
             fs::File::create(Self::config_path())
                 .map_err(|e| ConfigError::CreateFile(e.to_string()))?
-                .write_all(b"{}")
+                .write_all(b"{\n  \"$schema\": \"./config.schema.json\"\n}\n")
                 .map_err(|e| ConfigError::CreateFile(e.to_string()))?;
         }
+
+        // Keep the editor schema beside the config file so autocomplete also
+        // works offline. Existing config files are not modified.
+        let schema = Config::json_schema();
+        let schema_path = Self::schema_path();
+        let schema_is_current =
+            fs::read_to_string(&schema_path).is_ok_and(|existing| existing.trim_end() == schema);
+        if !schema_is_current {
+            config.print_if_verbose(
+                format!(
+                    "Writing configuration schema at {}...",
+                    schema_path.display()
+                )
+                .as_str(),
+            );
+            fs::write(&schema_path, format!("{schema}\n"))
+                .map_err(|e| ConfigError::CreateFile(e.to_string()))?;
+        }
+
         Ok(())
     }
 
@@ -282,5 +310,48 @@ mod tests {
 
         let config = Config::read_config_file(&path, false).expect("file should exist");
         assert_eq!(config, UserConfig::default());
+    }
+
+    #[test]
+    fn test_read_config_file_ignores_schema_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        fs::write(&path, r#"{ "$schema": "./config.schema.json" }"#).unwrap();
+
+        let config = Config::read_config_file(&path, false).expect("file should exist");
+        assert_eq!(config, UserConfig::default());
+    }
+
+    #[test]
+    fn test_config_json_schema_is_draft07_with_expected_properties() {
+        let schema: serde_json::Value =
+            serde_json::from_str(&Config::json_schema()).expect("schema should be valid JSON");
+
+        assert_eq!(schema["$schema"], "http://json-schema.org/draft-07/schema#");
+        for property in [
+            "auto_clean",
+            "frequency",
+            "generators",
+            "julia_gen",
+            "nasa_apod_gen",
+            "solid_gen",
+            "spotlight_gen",
+            "themes",
+        ] {
+            assert!(
+                schema["properties"][property].is_object(),
+                "schema should describe `{property}`"
+            );
+        }
+    }
+
+    #[test]
+    fn test_committed_config_schema_is_up_to_date() {
+        let committed = include_str!("../../docs/config.schema.json").replace("\r\n", "\n");
+        let generated = format!("{}\n", Config::json_schema());
+        assert_eq!(
+            committed, generated,
+            "docs/config.schema.json is stale; regenerate it with `cargo run -- config --schema > docs/config.schema.json`"
+        );
     }
 }

@@ -1,7 +1,9 @@
 use super::super::configuration::Config;
 use super::utils::{AstraImage, WallpaperGeneratorError, download_image_to_memory};
 use chrono::{Local, NaiveDate};
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::Deserialize;
+use std::borrow::Cow;
 
 /// Today's picture of the day. This page also links to the calendar and archive.
 const APOD_TODAY_URL: &str = "https://science.nasa.gov/apod/";
@@ -459,6 +461,21 @@ impl ApodDate {
                 ),
             ),
         )?
+    }
+}
+
+impl JsonSchema for ApodDate {
+    fn schema_name() -> Cow<'static, str> {
+        "ApodDate".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "description": "A date in YYMMDD format, for example \"260423\" for April 23rd, 2026.",
+            "examples": ["260423"]
+        })
     }
 }
 
