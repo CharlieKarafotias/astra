@@ -126,7 +126,8 @@ pub fn require_generation_device(allow_cpu: bool) -> Result<SelectedDevice> {
         Tier::GpuTurbo => Ok(detected),
         Tier::CpuFallback => {
             let reason = if detected.kind == DeviceKind::Cpu {
-                "no GPU is available (build with --features metal or --features cuda, then rerun)"
+                "this build has no GPU backend compiled in. macOS builds include Metal \
+                 automatically; on Linux rebuild with --features cuda,cudnn"
                     .to_string()
             } else {
                 format!(

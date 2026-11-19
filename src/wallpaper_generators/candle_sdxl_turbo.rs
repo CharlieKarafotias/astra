@@ -199,7 +199,7 @@ pub fn generate(config: &Config, request: &GenerateRequest) -> Result<GenerateOu
 
     let started = Instant::now();
     let selected = device::require_generation_device(request.allow_cpu)?;
-    println!(
+    config.print_if_verbose(&format!(
         "Device: {} | model: stabilityai/sdxl-turbo | size: {}x{} | steps: {} | guidance: {} | seed: {}",
         selected.description(),
         request.width,
@@ -207,8 +207,7 @@ pub fn generate(config: &Config, request: &GenerateRequest) -> Result<GenerateOu
         request.steps,
         request.guidance_scale,
         request.seed
-    );
-
+    ));
     selected
         .device
         .set_seed(request.seed)
@@ -231,7 +230,7 @@ pub fn generate(config: &Config, request: &GenerateRequest) -> Result<GenerateOu
     let use_guidance = request.guidance_scale > 1.0;
 
     let phase = Instant::now();
-    println!("Encoding the prompt (two CLIP encoders)...");
+    config.print_if_verbose("Encoding the prompt (two CLIP encoders)...");
     // The text encoders run on the CPU and are dropped before the UNet loads.
     // CLIP-G is ~2.8 GB in f32; keeping it on the GPU of a 16 GiB Mac would
     // count against Metal's working set for no speed benefit (it is one pass).
@@ -261,7 +260,10 @@ pub fn generate(config: &Config, request: &GenerateRequest) -> Result<GenerateOu
     let text_embeddings = Tensor::cat(&[clip_embeddings, clip2_embeddings], D::Minus1)?
         .to_device(&selected.device)?
         .to_dtype(selected.dtype)?;
-    println!("  text encoding took {:.1}s", phase.elapsed().as_secs_f32());
+    config.print_if_verbose(&format!(
+        "  text encoding took {:.1}s",
+        phase.elapsed().as_secs_f32()
+    ));
 
     let generation_context = || {
         format!(
@@ -295,7 +297,7 @@ pub fn generate(config: &Config, request: &GenerateRequest) -> Result<GenerateOu
         selected.dtype
     };
 
-    println!("Loading the UNet...");
+    config.print_if_verbose("Loading the UNet...");
     let phase = Instant::now();
     let unet = sd_config
         .build_unet(&files.unet, &selected.device, 4, false, selected.dtype)
@@ -306,7 +308,10 @@ pub fn generate(config: &Config, request: &GenerateRequest) -> Result<GenerateOu
             )
         })
         .with_context(generation_context)?;
-    println!("  UNet loaded in {:.1}s", phase.elapsed().as_secs_f32());
+    config.print_if_verbose(&format!(
+        "  UNet loaded in {:.1}s",
+        phase.elapsed().as_secs_f32()
+    ));
 
     let latents = Tensor::randn(
         0f32,
@@ -317,7 +322,10 @@ pub fn generate(config: &Config, request: &GenerateRequest) -> Result<GenerateOu
     let mut latents = (latents * scheduler.init_noise_sigma())?.to_dtype(selected.dtype)?;
     let timesteps = scheduler.timesteps().to_vec();
 
-    println!("Starting sampling ({} steps)...", timesteps.len());
+    config.print_if_verbose(&format!(
+        "Starting sampling ({} steps)...",
+        timesteps.len()
+    ));
     for (index, &timestep) in timesteps.iter().enumerate() {
         let step_started = Instant::now();
         let latent_input = if use_guidance {
@@ -342,21 +350,21 @@ pub fn generate(config: &Config, request: &GenerateRequest) -> Result<GenerateOu
         latents = scheduler
             .step(&noise_pred, timestep, &latents)
             .with_context(generation_context)?;
-        println!(
+        config.print_if_verbose(&format!(
             "step {}/{} done in {:.2}s",
             index + 1,
             timesteps.len(),
             step_started.elapsed().as_secs_f32()
-        );
+        ));
     }
 
     // The UNet is by far the largest allocation (~5 GiB in f16). Free it before
     // the decoder runs; on Metal the decoder reads the latents on the CPU, so
     // make sure the sampling command buffers have completed first.
-    println!("Decoding latents...");
+    config.print_if_verbose("Decoding latents...");
     selected.device.synchronize()?;
     drop(unet);
-    println!("Loading the VAE...");
+    config.print_if_verbose("Loading the VAE...");
     let phase = Instant::now();
     let vae = sd_config
         .build_vae(&files.vae, &vae_device, vae_dtype)
@@ -366,13 +374,19 @@ pub fn generate(config: &Config, request: &GenerateRequest) -> Result<GenerateOu
                 files.vae.display()
             )
         })?;
-    println!("  VAE loaded in {:.1}s", phase.elapsed().as_secs_f32());
+    config.print_if_verbose(&format!(
+        "  VAE loaded in {:.1}s",
+        phase.elapsed().as_secs_f32()
+    ));
     let phase = Instant::now();
     let latents = latents.to_device(&vae_device)?.to_dtype(vae_dtype)?;
     let image = vae
         .decode(&(&latents / VAE_SCALE)?)
         .with_context(generation_context)?;
-    println!("  VAE decode took {:.1}s", phase.elapsed().as_secs_f32());
+    config.print_if_verbose(&format!(
+        "  VAE decode took {:.1}s",
+        phase.elapsed().as_secs_f32()
+    ));
     let image = ((image / 2.0)? + 0.5)?.to_device(&Device::Cpu)?;
     let image = image.clamp(0f32, 1.0)?;
     let image = (image * 255.0)?.to_dtype(DType::U8)?.i(0)?;
@@ -499,10 +513,10 @@ pub fn generate_sdxl(
                 path.display()
             ))
         })?;
-        println!("Wrote {}", path.display());
+        config.print_if_verbose(&format!("Wrote {}", path.display()));
     }
 
-    println!(
+    config.print_if_verbose(&format!(
         "Prompt: {}\nDevice: {}\nModel: stabilityai/sdxl-turbo\nDtype: {:?}\nSize: {}x{}\nSteps: {}\nSeed: {}\nElapsed: {:.1}s",
         request.prompt,
         output.device,
@@ -512,7 +526,7 @@ pub fn generate_sdxl(
         request.steps,
         output.seed,
         output.elapsed.as_secs_f32()
-    );
+    ));
 
     Ok(output.image)
 }
@@ -558,7 +572,7 @@ pub fn dry_run_sdxl(
     if tier == device::Tier::CpuFallback && !request.allow_cpu {
         println!(
             "Real generation would require --allow-cpu on this machine. \
-             Build with --features metal (macOS) or --features cuda,cudnn (Nvidia) for the GPU path."
+             macOS builds include Metal automatically; on Linux build with --features cuda,cudnn."
         );
     }
     println!("Model cache: {}", super::download::cache_dir().display());

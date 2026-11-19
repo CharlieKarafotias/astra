@@ -10,7 +10,9 @@ description = "A tool for generating wallpaper images"
 [features]
 default = []
 
-# Apple Silicon
+# Apple Silicon and Intel macOS. Metal is enabled automatically by the macOS
+# target dependency below; this feature remains for explicit opt-in and for
+# tooling that passes features by name.
 metal = ["candle-core/metal", "candle-transformers/metal", "candle-core/accelerate", "candle-transformers/accelerate"]
 # Nvidia
 cuda = ["candle-core/cuda", "candle-transformers/cuda"]
@@ -65,6 +67,14 @@ windows = { version = "0.62.2", features = [
 objc2 = "0.6.5"
 objc2-app-kit = "0.3.2"
 objc2-foundation = "0.3.2"
+# Candle's backends are compile-time features, not runtime choices. Enable the
+# Metal backend (and Accelerate for the CPU VAE decode) automatically on macOS so
+# a plain `cargo build --release` — including the Homebrew formula — produces the
+# GPU build with no extra flags. Linux and Windows stay CPU-only: CUDA requires
+# the CUDA toolkit at build time, so it remains opt-in (`--features cuda,cudnn`).
+candle-core = { version = "0.11.1", features = ["metal", "accelerate"] }
+candle-nn = { version = "0.11.1", features = ["metal", "accelerate"] }
+candle-transformers = { version = "0.11.1", features = ["metal", "accelerate"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
