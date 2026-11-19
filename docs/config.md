@@ -122,9 +122,13 @@ Windows also has a few scheduling limitations to consider:
 A list of wallpaper generators to choose from when `astra` runs. If multiple generators are listed, Astra will select one at random.
 
 **Type:** array  
-**Allowed values:** `["julia", "nasa_apod", "solid", "spotlight"]`
+**Allowed values:** `["julia", "nasa_apod", "solid", "spotlight", "sdxl"]`
 **Example:** `["spotlight", "solid"]`  
-**Default:** All available generators are used; one is chosen randomly.
+**Default:** `["julia", "nasa_apod", "solid", "spotlight"]`; one is chosen randomly.
+
+`sdxl` is opt-in: it needs a Metal/CUDA build and at least 16 GiB of memory, and
+it may download several gigabytes of model weights on first use. If it is listed
+on an unsupported machine, Astra warns and skips it.
 
 ---
 
@@ -272,6 +276,62 @@ Specifies the latest astronomy picture of the day to use (can be alone or used a
 **Format:** `yymmdd`
 **Example:** `260423` (April 23rd, 2026)
 **Default:** Current day is used when `date_from` is set & when neither `date_from` nor `date_to` are set
+
+---
+
+## SDXL Turbo Generator (`sdxl_gen`)
+
+Controls the local, pure-Rust text-to-image generator. It runs
+`stabilityai/sdxl-turbo` with Candle; no Python or external service is involved.
+
+### `sdxl_gen.prompt`
+
+A fixed prompt. When unset, Astra generates one from `characteristics`.
+
+**Type:** string
+**Example:** `"Santorini, Greece, whitewashed buildings with blue domes, golden hour, photorealistic photograph, no people, no text"`
+**Default:** generated from `characteristics`
+
+### `sdxl_gen.characteristics`
+
+Traits the generated prompt should include. The generator combines them with a
+seeded random subject, detail, lighting and style, so each run can produce a
+different wallpaper while keeping the requested traits.
+
+**Type:** array of strings
+**Example:** `["landscape", "golden hour", "no people", "no text"]`
+**Default:** `["photorealistic", "high detail", "no people", "no text", "wallpaper"]`
+
+### `sdxl_gen.negative_prompt`
+
+Text the image should avoid. SDXL Turbo is distilled for guidance `0`, where
+classifier-free guidance (and therefore the negative prompt) has no effect.
+Astra accepts it for completeness and tells you when it is being ignored.
+
+**Type:** string
+**Default:** none
+
+### `sdxl_gen.steps`
+
+Number of denoising steps. SDXL Turbo is tuned for 1-4 steps.
+
+**Type:** integer (1-10)
+**Default:** `4`
+
+### `sdxl_gen.guidance_scale`
+
+Classifier-free guidance scale. SDXL Turbo is distilled for `0`.
+
+**Type:** number
+**Default:** `0.0`
+
+### `sdxl_gen.seed`
+
+Fixed random seed. The same prompt, size, steps and seed reproduce the image.
+When unset, a random seed is chosen and printed.
+
+**Type:** integer
+**Default:** random
 
 ---
 

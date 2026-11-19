@@ -1,10 +1,15 @@
 mod bing_spotlight;
+mod candle_sdxl_turbo;
+pub mod device;
+pub mod download;
 mod julia;
 mod nasa_apod;
+mod prompt;
 mod solid_color;
 mod utils;
 
 pub use bing_spotlight::generate_bing_spotlight;
+pub use candle_sdxl_turbo::{dry_run_sdxl, generate_sdxl, sdxl_can_run_on_this_machine};
 pub use julia::generate_julia_set;
 pub use nasa_apod::{ApodDate, generate_nasa_apod, parse_yymmdd};
 pub use solid_color::{Color, generate_solid_color};

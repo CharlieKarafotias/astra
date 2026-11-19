@@ -1,7 +1,9 @@
 use super::super::constants::{APPLICATION, ORGANIZATION, QUALIFIER};
 use super::{
     frequency::Frequency,
-    generators::{Generators, JuliaConfig, NasaApodConfig, SolidConfig, SpotlightConfig},
+    generators::{
+        Generators, JuliaConfig, NasaApodConfig, SdxlConfig, SolidConfig, SpotlightConfig,
+    },
     theme::ThemeConfigs,
     user_config::UserConfig,
 };
@@ -34,6 +36,7 @@ impl Config {
                     generators: user_config.generators,
                     julia_gen: user_config.julia_gen,
                     nasa_apod_gen: user_config.nasa_apod_gen,
+                    sdxl_gen: user_config.sdxl_gen,
                     solid_gen: user_config.solid_gen,
                     spotlight_gen: user_config.spotlight_gen,
                     themes: user_config.themes,
@@ -101,6 +104,14 @@ impl Config {
     pub fn nasa_apod_gen(&self) -> Option<&NasaApodConfig> {
         if let Some(user_config) = &self.user_config {
             user_config.nasa_apod_gen.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn sdxl_gen(&self) -> Option<&SdxlConfig> {
+        if let Some(user_config) = &self.user_config {
+            user_config.sdxl_gen.as_ref()
         } else {
             None
         }

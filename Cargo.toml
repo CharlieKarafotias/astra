@@ -7,11 +7,31 @@ repository = "https://github.com/CharlieKarafotias/astra"
 authors = ["Charlie Karafotias <cnkara2023@gmail.com>"]
 description = "A tool for generating wallpaper images"
 
+[features]
+default = []
+
+# Apple Silicon
+metal = ["candle-core/metal", "candle-transformers/metal", "candle-core/accelerate", "candle-transformers/accelerate"]
+# Nvidia
+cuda = ["candle-core/cuda", "candle-transformers/cuda"]
+cudnn = ["candle-core/cudnn", "candle-transformers/cudnn"]
+# CPU speedups
+accelerate = ["candle-core/accelerate"]
+mkl = ["candle-core/mkl"]
+
 [dependencies]
+anyhow = "1.0.104"
+candle-core = "0.11.1"
+candle-nn = "0.11.1"
+candle-transformers = "0.11.1"
 chrono = { version = "0.4.45", features = ["clock"] }
 clap = { version = "4.6.7", features = ["derive"] }
 clap_complete = "4.6.11"
 directories = "6.0.0"
+# Blocking-only client (ureq). This deliberately omits hf-hub's `tokio` feature so it
+# does not pull a second `reqwest` major version; the sync API and the standard
+# Hugging Face cache layout are all astra needs.
+hf-hub = { version = "0.4.3", default-features = false, features = ["default-tls", "ureq"] }
 # Only the formats astra actually uses: PNG (what `save` writes), JPEG/PNG (what the
 # remote generators decode) and GIF (the early NASA APOD archive). Disabling the
 # default features keeps the unused decoders (AVIF/EXR/TIFF/WebP/...) out of the
@@ -27,6 +47,9 @@ reqwest = { version = "0.13.5", features = ["blocking", "json"] }
 schemars = "1.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+# `fancy-regex` (rather than the default `onig`) keeps the CLIP tokenizer pure Rust.
+tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-regex"] }
+sysinfo = "0.32"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [

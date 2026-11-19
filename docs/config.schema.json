@@ -59,6 +59,17 @@
         }
       ]
     },
+    "sdxl_gen": {
+      "description": "Local SDXL Turbo generator options.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SdxlConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "solid_gen": {
       "description": "Solid-color generator options.",
       "anyOf": [
@@ -163,7 +174,8 @@
           "julia",
           "nasa_apod",
           "solid",
-          "spotlight"
+          "spotlight",
+          "sdxl"
         ]
       }
     },
@@ -248,6 +260,62 @@
               "type": "null"
             }
           ]
+        }
+      }
+    },
+    "SdxlConfig": {
+      "description": "Options for the local SDXL Turbo (pure Rust) generator.",
+      "type": "object",
+      "properties": {
+        "characteristics": {
+          "description": "Traits the generated prompt should include (for example `\"golden hour\"`).\nWhen empty or missing, a default set of wallpaper characteristics is used.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "guidance_scale": {
+          "description": "Classifier-free guidance scale. SDXL Turbo is distilled for 0.0.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "negative_prompt": {
+          "description": "Negative prompt. SDXL Turbo runs at guidance 0, where it has no effect.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prompt": {
+          "description": "Fixed prompt. When unset, a prompt is generated from `characteristics`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "seed": {
+          "description": "Fixed random seed. The same prompt, size, steps and seed reproduce an image.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "steps": {
+          "description": "Number of denoising steps (1-10; SDXL Turbo needs 1-4).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
         }
       }
     },

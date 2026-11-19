@@ -1,6 +1,8 @@
 use super::{
     frequency::Frequency,
-    generators::{Generators, JuliaConfig, NasaApodConfig, SolidConfig, SpotlightConfig},
+    generators::{
+        Generators, JuliaConfig, NasaApodConfig, SdxlConfig, SolidConfig, SpotlightConfig,
+    },
     theme::ThemeConfigs,
 };
 use schemars::generate::SchemaSettings;
@@ -23,6 +25,8 @@ pub(super) struct UserConfig {
     pub(super) julia_gen: Option<JuliaConfig>,
     /// NASA Astronomy Picture of the Day generator options.
     pub(super) nasa_apod_gen: Option<NasaApodConfig>,
+    /// Local SDXL Turbo generator options.
+    pub(super) sdxl_gen: Option<SdxlConfig>,
     /// Solid-color generator options.
     pub(super) solid_gen: Option<SolidConfig>,
     /// Bing Spotlight generator options.
@@ -59,6 +63,7 @@ impl Display for UserConfig {
         push_field!(generators);
         push_field!(julia_gen);
         push_field!(nasa_apod_gen);
+        push_field!(sdxl_gen);
         push_field!(solid_gen);
         push_field!(spotlight_gen);
         push_field!(themes);

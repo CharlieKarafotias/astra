@@ -6,12 +6,14 @@ use std::fmt::{Display, Formatter};
 
 pub(crate) mod julia;
 mod nasa_apod;
+mod sdxl;
 mod solid;
 mod spotlight;
 
 // Any generator config should be added to ALL_GENERATORS with default values (see Generators below)
 pub(super) use julia::JuliaConfig;
 pub(super) use nasa_apod::NasaApodConfig;
+pub(super) use sdxl::SdxlConfig;
 pub(super) use solid::SolidConfig;
 pub(super) use spotlight::SpotlightConfig;
 
@@ -38,6 +40,11 @@ macro_rules! respect_user_config_or_default {
 pub struct Generators(pub(super) Vec<Generator>);
 
 impl Generators {
+    /// Generators picked by default in auto mode.
+    ///
+    /// `sdxl` is deliberately absent: it needs a capable GPU, a ~7 GB download and
+    /// a generated prompt. It runs in auto mode only when the user explicitly adds
+    /// `"sdxl"` to `generators` in their config.
     pub const ALL_GENERATORS: [Generator; 4] = [
         Generator::Julia,
         Generator::NasaAPOD {
@@ -71,7 +78,9 @@ impl JsonSchema for Generators {
     }
 
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
-        let allowed: Vec<&str> = Self::ALL_GENERATORS.iter().map(Generator::prefix).collect();
+        let mut allowed: Vec<&str> = Self::ALL_GENERATORS.iter().map(Generator::prefix).collect();
+        // Opt-in only: valid in the config, but never chosen by default.
+        allowed.push("sdxl");
         json_schema!({
             "type": "array",
             "description": "Generators Astra may choose from. One is picked at random on each run.",

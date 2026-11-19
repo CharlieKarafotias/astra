@@ -7,13 +7,13 @@ mod wallpaper_generators;
 
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
-use cli::{Cli, Commands, Generator};
+use cli::{Cli, Commands, Generator, ModelCommand};
 use configuration::{Config, Frequency, Generators};
 use os_implementations::{handle_frequency, open_editor};
 use rand::random_range;
 use wallpaper_generators::{
-    Color, delete_wallpapers, generate_bing_spotlight, generate_julia_set, generate_nasa_apod,
-    generate_solid_color, handle_generate_options,
+    Color, delete_wallpapers, dry_run_sdxl, generate_bing_spotlight, generate_julia_set,
+    generate_nasa_apod, generate_solid_color, handle_generate_options,
 };
 
 #[cfg(target_os = "macos")]
@@ -59,18 +59,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             no_save,
             no_update,
         }) => {
+            // A dry run validates the request, device and dimensions only. It must
+            // succeed on CI machines without a GPU, so it never downloads weights.
+            if let Generator::Sdxl(options) = &image
+                && options.dry_run
+            {
+                dry_run_sdxl(&config, options)?;
+                return Ok(());
+            }
+
             config.print_if_verbose(format!("Generating image of type: {:?}...", image).as_str());
             let image_buf = match &image {
                 Generator::Julia => generate_julia_set(&config),
                 Generator::NasaAPOD { date, random } => generate_nasa_apod(&config, date, *random),
                 Generator::Solid { mode } => generate_solid_color(&config, mode),
                 Generator::Spotlight => generate_bing_spotlight(&config),
+                Generator::Sdxl(options) => wallpaper_generators::generate_sdxl(&config, options),
             }?;
             handle_generate_options(&config, &image_buf, &image, no_save, no_update)?;
         }
         Some(Commands::GenerateCompletions { shell }) => {
             generate(shell, &mut Cli::command(), "astra", &mut std::io::stdout());
         }
+        Some(Commands::Models { command }) => match command {
+            ModelCommand::Download => wallpaper_generators::download::download_all(&config)?,
+            ModelCommand::List => wallpaper_generators::download::print_model_list(),
+        },
         None => {
             // Since 'astra' was called, respect user config
             config.respect_user_config = true;
@@ -86,11 +100,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 delete_wallpapers(&config, false, false, config.auto_clean())?;
             }
 
-            let generators = config
+            let configured_generators = config
                 .generators()
                 .as_ref()
                 .map(|generators| generators.to_vec())
                 .unwrap_or(Generators::ALL_GENERATORS.to_vec());
+
+            // SDXL only runs when the machine has a capable GPU; otherwise silently
+            // picking it would turn an automatic run into a failure.
+            let generators: Vec<Generator> = configured_generators
+                .iter()
+                .filter(|generator| generator.is_available())
+                .cloned()
+                .collect();
+            if generators.len() != configured_generators.len() {
+                println!(
+                    "WARN: skipping the sdxl generator: no capable GPU (needs Metal/CUDA and >= 16 GiB memory)"
+                );
+            }
+            if generators.is_empty() {
+                return Err("no generators are available on this machine".into());
+            }
 
             // If true, then run update - else ignore
             if handle_frequency(&config)? {

@@ -23,6 +23,7 @@ with minimal effort.
 | `spotlight` | Bing Spotlight daily photo                                         |
 | `nasa_apod` | NASA Astronomy Picture of the Day (HTML scrape, no API key needed)  |
 | `solid`     | 20 named colors, random, or custom RGB                             |
+| `sdxl`      | Local text-to-image via Candle + SDXL Turbo (pure Rust, opt-in)    |
 
 ### 2.2 Themes
 
@@ -45,6 +46,9 @@ themes via config. Generators can opt into `respect_color_themes`.
   bypasses global config (frequency, generator list) but honors per-generator options.
   - `nasa-apod [YYMMDD] [--random]`
   - `solid <color <name>|random|rgb <r> <g> <b>>`
+  - `sdxl [--prompt] [--negative-prompt] [--width] [--height] [--steps]
+    [--guidance-scale] [--seed] [--output] [--fast] [--dry-run] [--allow-cpu]`
+- `astra models download|list` — pre-warm and inspect the Hugging Face cache.
 - `astra clean [--older-than <freq>] [--directory]` — delete cached wallpapers.
 - `astra config [--open]` — create/print config path; `--open` opens it in `$EDITOR`.
 - `astra generate-completions <shell>` — shell completions.
@@ -72,6 +76,9 @@ with a warning (TODO: partial processing).
   per-generator config, `theme.rs`.
 - `src/wallpaper_generators/` — each generator returns `AstraImage`
   (`ImageBuffer<Rgb<u8>>`); `utils.rs` handles saving, deletion, color maps.
+  `candle_sdxl_turbo.rs` is the Candle pipeline, `device.rs` handles device/tier
+  selection, `download.rs` resolves the Hugging Face cache, and `prompt.rs`
+  generates seeded prompts from config characteristics.
 - `src/themes/` — `ColorTheme`, `ThemeSelector`, default themes.
 - `src/os_implementations/` — `cfg(target_os)`-gated `linux`/`macos`/`windows`
   modules (dark-mode detection, resolution, `update_wallpaper`, schedulers).
@@ -109,5 +116,8 @@ entries) is left untouched.
   an undocumented endpoint.
 - `solid` generator reads `julia_gen.appearance` for dark mode (known bug, TODO).
 - Non-GNOME Linux distros unsupported for wallpaper setting.
+- `sdxl` requires a build with `--features metal` or `--features cuda,cudnn` and
+  at least 16 GiB of memory; the first run downloads ~7 GB of weights. It is
+  opt-in and never picked by the default auto-mode pool.
 - macOS scheduler granularity is effectively 10 minutes; Windows sub-minute
   frequencies clamp to 1 minute.
